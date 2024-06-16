@@ -6,6 +6,12 @@ exports.registerUser = async (req, res) => {
   try {
     const { username, password, confirmPassword } = req.body;
 
+    const user = await user_model.findOne({ username });
+
+    if (user) {
+      return res.status(400).json({ message: 'Username already exist.' });
+    }
+
     // Password validation
     if (password !== confirmPassword) {
       return res.status(400).json({ message: 'Passwords do not match' });
@@ -19,12 +25,13 @@ exports.registerUser = async (req, res) => {
     });
 
     const savedUser = await newUser.save();
-
+    
     // Generate JWT token
-    const token = jwt.sign({ userId: savedUser._id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ userId: savedUser._id }, process.env.JWT_SECRET || "chickcheck", {
       expiresIn: '1h',
     });
-
+    
+    
     res.status(201).json({ token, message: 'User registered successfully' });
   } catch (err) {
     console.error(err);
@@ -49,7 +56,7 @@ exports.loginUser = async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET || "chickcheck", {
       expiresIn: '1h',
     });
 
