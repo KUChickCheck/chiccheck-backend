@@ -1,22 +1,20 @@
 const express = require('express');
-const cors = require('cors')
+const cors = require('cors');
 const app = express();
 const connectDB = require('./Config/db');
 const authRoutes = require('./Route/authRoute');
-const testRoutes = require('./Route/testRoute');
-
+const courseRoutes = require('./Route/courseRoute');
 
 // Connect to MongoDB
 connectDB();
 
 // Middleware
 app.use(express.json());
-app.use(cors())
+app.use(cors());
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/test', testRoutes);
-
+app.use('/api/courses', courseRoutes);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
