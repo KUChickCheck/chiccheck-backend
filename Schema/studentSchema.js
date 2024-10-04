@@ -10,9 +10,9 @@ const studentSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   username: { type: String, unique: true, required: true },
   password: { type: String, required: true },
+  role: { type: String, enum: ['student', 'teacher', 'admin'], default: 'student' },
 });
 
-// Password hashing middleware
 studentSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);

@@ -1,20 +1,25 @@
 const jwt = require('jsonwebtoken');
 
-const authenticateToken = (req, res, next) => {
-  const token = req.cookies.authToken || req.headers.authorization;
+const authenticateTokenAndRole = (allowedRoles) => {
+  return (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
+    if (!token) return res.status(401).json({ msg: 'Access Denied: No token provided' });
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ message: 'Failed to authenticate token' });
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'chickcheck');
+      req.user = decoded;
+
+      if (!allowedRoles.includes(req.user.role)) {
+        return res.status(403).json({ msg: 'Access Denied: Insufficient permissions' });
+      }
+
+      next(); 
+    } catch (err) {
+      res.status(403).json({ msg: 'Invalid token' });
     }
-
-    req.user = decoded;
-    next();
-  });
+  };
 };
 
 async function verifyToken(token, secret) {
@@ -50,4 +55,4 @@ const verifyCookieToken = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticateToken, verifyCookieToken };
+module.exports = { authenticateTokenAndRole, verifyCookieToken };
