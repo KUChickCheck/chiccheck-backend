@@ -11,13 +11,4 @@ router.post('/register', jsonParser, registerUser);
 // POST Method /login
 router.post('/login', jsonParser, loginUser);
 
-// POST Method /register-course
-router.post('/register-course', jsonParser, verifyCookieToken, registerCourse);
-
-// GET Method /students
-router.get('/students', getAllStudents);
-
-// GET Method /student/:username
-router.get('/student/:username', getStudentByUsername);
-
 module.exports = router;

@@ -1,5 +1,5 @@
 const CheckIn = require('../Model/checkInModel');
-const User = require('../Model/userModel');
+const User = require('../Model/studentSchema');
 const Course = require('../Model/courseModel');
 
 // Create a new check-in
