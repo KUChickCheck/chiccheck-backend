@@ -3,8 +3,7 @@ const cors = require('cors');
 const app = express();
 const connectDB = require('./Config/db');
 const authRoutes = require('./Route/authRoute');
-const courseRoutes = require('./Route/courseRoute');
-const checkInRoutes = require('./Route/checkInRoute');
+const studentRoute = require('./Route/studentRoute');
 
 // Connect to MongoDB
 connectDB();
@@ -15,8 +14,7 @@ app.use(cors());
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/checkin', checkInRoutes);
+app.use('/api/student', studentRoute)
 
 // Start the server
 const PORT = process.env.PORT || 3000;
