@@ -10,7 +10,7 @@ const studentSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   username: { type: String, unique: true, required: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['student', 'teacher', 'admin'], default: 'student' },
+  role: { type: String, enum: ['student', 'admin'], default: 'student' },
 });
 
 studentSchema.pre('save', async function(next) {

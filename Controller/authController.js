@@ -1,8 +1,9 @@
 const Student = require("../Schema/studentSchema");
+const Teacher = require('../Schema/teacherSchema');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-exports.registerUser = async (req, res) => {
+exports.registerStudent = async (req, res) => {
   try {
     const {
       username,
@@ -60,7 +61,7 @@ exports.registerUser = async (req, res) => {
 };
 
 
-exports.loginUser = async (req, res) => {
+exports.loginStudent = async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -88,5 +89,34 @@ exports.loginUser = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+exports.loginTeacher = async (req, res) => {
+  try {
+      const { username, password } = req.body;
+
+      const teacher = await Teacher.findOne({ username });
+      if (!teacher) {
+          return res.status(400).json({ message: 'Invalid username or password' });
+      }
+
+      const isMatch = await bcrypt.compare(password, teacher.password);
+      if (!isMatch) {
+          return res.status(400).json({ message: 'Invalid username or password' });
+      }
+
+      const token = jwt.sign(
+        { teacherId: teacher._id, role: teacher.role },
+        process.env.JWT_SECRET || "chickcheck",
+        {
+          expiresIn: "3h",
+        }
+      );
+
+      res.status(200).json({ token, message: "Login successful" });
+  } catch (error) {
+      console.error(err);
+      res.status(500).json({ message: "Internal Server Error" });
   }
 };
