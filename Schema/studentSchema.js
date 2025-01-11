@@ -9,8 +9,7 @@ const studentSchema = new mongoose.Schema({
   class_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }],
   created_at: { type: Date, default: Date.now },
   username: { type: String, unique: true, required: true },
-  password: { type: String, required: true },
-  role: { type: String, enum: ['student', 'teacher', 'admin'], default: 'student' },
+  password: { type: String, required: true }
 });
 
 studentSchema.pre('save', async function(next) {

@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const authenticateTokenAndRole = (allowedRoles) => {
+const authenticateToken = (tokenType) => {
   return (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -9,17 +9,20 @@ const authenticateTokenAndRole = (allowedRoles) => {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'chickcheck');
-      req.user = decoded;
 
-      if (!allowedRoles.includes(req.user.role)) {
-        return res.status(403).json({ msg: 'Access Denied: Insufficient permissions' });
+      if (tokenType === 'teacher' && !decoded.teacherId) {
+        return res.status(403).json({ msg: 'Access Denied: Teacher token required' });
+      }
+      if (tokenType === 'student' && !decoded.studentId) {
+        return res.status(403).json({ msg: 'Access Denied: Student token required' });
       }
 
-      next(); 
+      req.user = decoded;
+      next();
     } catch (err) {
       res.status(403).json({ msg: 'Invalid token' });
     }
   };
 };
 
-module.exports = { authenticateTokenAndRole};
+module.exports = { authenticateToken };

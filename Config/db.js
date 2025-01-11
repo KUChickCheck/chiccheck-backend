@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    await mongoose.connect('mongodb://root:example@localhost:27017/chickcheck?authSource=admin', {
+    await mongoose.connect('mongodb://chiccheck:J4sa6Z37@35.187.246.165:27017/chiccheck', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
@@ -14,3 +14,4 @@ const connectDB = async () => {
 };
 
 module.exports = connectDB;
+//mongodb://root:example@localhost:27017/chickcheck?authSource=admin

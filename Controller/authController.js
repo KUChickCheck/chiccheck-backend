@@ -1,8 +1,10 @@
 const Student = require("../Schema/studentSchema");
+const Teacher = require("../Schema/teacherSchema");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-exports.registerUser = async (req, res) => {
+// Student Registration
+exports.registerStudent = async (req, res) => {
   try {
     const {
       username,
@@ -12,7 +14,6 @@ exports.registerUser = async (req, res) => {
       first_name,
       last_name,
       email,
-      role,
     } = req.body;
 
     if (password !== confirmPassword) {
@@ -40,14 +41,13 @@ exports.registerUser = async (req, res) => {
       student_id,
       first_name,
       last_name,
-      email,
-      role: role || 'student',
+      email
     });
 
     const saveStudent = await newStudent.save();
 
     const token = jwt.sign(
-      { studentId: saveStudent._id, role: saveStudent.role },
+      { studentId: saveStudent._id },
       process.env.JWT_SECRET || "chickcheck",
       { expiresIn: "1h" }
     );
@@ -59,8 +59,8 @@ exports.registerUser = async (req, res) => {
   }
 };
 
-
-exports.loginUser = async (req, res) => {
+// Student Login
+exports.loginStudent = async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -77,14 +77,98 @@ exports.loginUser = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { studentId: student._id, role: student.role },
+      { studentId: student._id },
       process.env.JWT_SECRET || "chickcheck",
-      {
-        expiresIn: "1h",
-      }
+      { expiresIn: "1h" }
     );
 
-    res.status(200).json({ token, message: "Login successful" });
+    res.status(200).json({ token, message: "Student login successful" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Teacher Registration
+exports.registerTeacher = async (req, res) => {
+  try {
+    const {
+      username,
+      password,
+      confirmPassword,
+      teacher_id,
+      first_name,
+      last_name,
+      email,
+    } = req.body;
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ msg: "Passwords do not match." });
+    }
+
+    const existingUser = await Teacher.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: "Username already exists." });
+    }
+
+    const existingTeacherId = await Teacher.findOne({ teacher_id });
+    if (existingTeacherId) {
+      return res.status(400).json({ message: "Teacher ID already exists." });
+    }
+
+    const existingEmail = await Teacher.findOne({ email });
+    if (existingEmail) {
+      return res.status(400).json({ message: "Email already exists." });
+    }
+
+    const newTeacher = new Teacher({
+      username,
+      password,
+      teacher_id,
+      first_name,
+      last_name,
+      email
+    });
+
+    const saveTeacher = await newTeacher.save();
+
+    const token = jwt.sign(
+      { teacherId: saveTeacher._id },
+      process.env.JWT_SECRET || "chickcheck",
+      { expiresIn: "1h" }
+    );
+
+    res.status(201).json({ token, message: "Teacher registered successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Teacher Login
+exports.loginTeacher = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const teacher = await Teacher.findOne({ username });
+
+    if (!teacher) {
+      return res.status(400).json({ message: "Invalid username or password" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, teacher.password);
+
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: "Invalid username or password" });
+    }
+
+    const token = jwt.sign(
+      { teacherId: teacher._id },
+      process.env.JWT_SECRET || "chickcheck",
+      { expiresIn: "1h" }
+    );
+
+    res.status(200).json({ token, message: "Teacher login successful" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });

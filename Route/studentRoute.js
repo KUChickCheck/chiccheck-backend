@@ -1,27 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateTokenAndRole } = require('../Middlewares/authMiddleware');
+const { authenticateToken } = require('../Middlewares/authMiddleware');
 const {
   getAllStudents,
   getStudentById,
   createStudent,
   updateStudent,
   deleteStudent,
+  registerClass,
+  unregisterClass
 } = require('../Controller/studentController');
 
-// GET all students
-router.get('/', authenticateTokenAndRole(['admin']), getAllStudents);
+router.get('/', authenticateToken('teacher'), getAllStudents);
+router.get('/:id', authenticateToken('teacher'), getStudentById);
+router.post('/', authenticateToken('teacher'), createStudent);
+router.put('/:id', authenticateToken('teacher'), updateStudent);
+router.delete('/:id', authenticateToken('teacher'), deleteStudent);
 
-// GET a single student by ID
-router.get('/:id', authenticateTokenAndRole(['admin', 'teacher']), getStudentById);
-
-// POST a new student
-router.post('/', authenticateTokenAndRole(['admin']), createStudent);
-
-// PUT update an existing student by ID
-router.put('/:id', authenticateTokenAndRole(['admin']), updateStudent);
-
-// DELETE a student by ID
-router.delete('/:id', authenticateTokenAndRole(['admin']), deleteStudent);
+router.post('/:id/register-class', authenticateToken('student'), registerClass);
+router.post('/:id/unregister-class', authenticateToken('student'), unregisterClass);
 
 module.exports = router;
