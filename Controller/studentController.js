@@ -1,5 +1,5 @@
-const Student = require('../Schema/studentSchema');
-const Class = require('../Schema/classSchema');
+const Student = require("../Schema/studentSchema");
+const Class = require("../Schema/classSchema");
 
 // GET all students
 exports.getAllStudents = async (req, res) => {
@@ -16,10 +16,21 @@ exports.getAllStudents = async (req, res) => {
 exports.getStudentById = async (req, res) => {
   try {
     if (req.params.id !== req.user.studentId) {
-      return res.status(403).json({ message: "Access forbidden: You can only access your own data." });
+      return res
+        .status(403)
+        .json({
+          message: "Access forbidden: You can only access your own data.",
+        });
     }
 
-    const student = await Student.findById(req.params.id).populate("class_ids");
+    const student = await Student.findById(req.params.id).populate({
+      path: "class_ids", // Populate the 'class_ids' field
+      populate: {
+        path: "teacher_ids", // Populate the 'teacher_ids' field inside each class document
+        model: "Teacher", // Specify the 'Teacher' model for teacher data
+      },
+    });
+
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
@@ -34,7 +45,15 @@ exports.getStudentById = async (req, res) => {
 // POST a new student
 exports.createStudent = async (req, res) => {
   try {
-    const { username, password, student_id, first_name, last_name, email, role } = req.body;
+    const {
+      username,
+      password,
+      student_id,
+      first_name,
+      last_name,
+      email,
+      role,
+    } = req.body;
 
     const existingUser = await Student.findOne({ username });
     if (existingUser) {
@@ -59,11 +78,16 @@ exports.createStudent = async (req, res) => {
       first_name,
       last_name,
       email,
-      role: role || 'student',
+      role: role || "student",
     });
 
     const saveStudent = await newStudent.save();
-    res.status(201).json({ message: "Student registered successfully", student: saveStudent });
+    res
+      .status(201)
+      .json({
+        message: "Student registered successfully",
+        student: saveStudent,
+      });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });
@@ -76,12 +100,19 @@ exports.updateStudent = async (req, res) => {
     const studentId = req.params.id;
     const updates = req.body;
 
-    const updatedStudent = await Student.findByIdAndUpdate(studentId, updates, { new: true });
+    const updatedStudent = await Student.findByIdAndUpdate(studentId, updates, {
+      new: true,
+    });
     if (!updatedStudent) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    res.status(200).json({ message: "Student updated successfully", student: updatedStudent });
+    res
+      .status(200)
+      .json({
+        message: "Student updated successfully",
+        student: updatedStudent,
+      });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });
@@ -112,7 +143,9 @@ exports.registerClass = async (req, res) => {
 
     // Ensure student can only register themselves
     if (studentId !== req.user.studentId) {
-      return res.status(403).json({ message: "You can only register yourself for classes" });
+      return res
+        .status(403)
+        .json({ message: "You can only register yourself for classes" });
     }
 
     const student = await Student.findById(studentId);
@@ -126,7 +159,9 @@ exports.registerClass = async (req, res) => {
     }
 
     if (student.class_ids.includes(class_id)) {
-      return res.status(400).json({ message: "You are already registered to this class" });
+      return res
+        .status(400)
+        .json({ message: "You are already registered to this class" });
     }
 
     // Update both student and class documents
@@ -134,16 +169,15 @@ exports.registerClass = async (req, res) => {
       studentId,
       { $push: { class_ids: class_id } },
       { new: true }
-    ).populate('class_ids', 'class_name class_code');
+    ).populate("class_ids", "class_name class_code");
 
-    await Class.findByIdAndUpdate(
-      class_id,
-      { $push: { student_ids: studentId } }
-    );
+    await Class.findByIdAndUpdate(class_id, {
+      $push: { student_ids: studentId },
+    });
 
     res.status(200).json({
       message: "Successfully registered to class",
-      student: updatedStudent
+      student: updatedStudent,
     });
   } catch (err) {
     console.error(err);
@@ -159,7 +193,9 @@ exports.unregisterClass = async (req, res) => {
 
     // Ensure student can only unregister themselves
     if (studentId !== req.user.studentId) {
-      return res.status(403).json({ message: "You can only unregister yourself from classes" });
+      return res
+        .status(403)
+        .json({ message: "You can only unregister yourself from classes" });
     }
 
     const student = await Student.findById(studentId);
@@ -168,7 +204,9 @@ exports.unregisterClass = async (req, res) => {
     }
 
     if (!student.class_ids.includes(class_id)) {
-      return res.status(400).json({ message: "You are not registered to this class" });
+      return res
+        .status(400)
+        .json({ message: "You are not registered to this class" });
     }
 
     // Update both student and class documents
@@ -176,16 +214,15 @@ exports.unregisterClass = async (req, res) => {
       studentId,
       { $pull: { class_ids: class_id } },
       { new: true }
-    ).populate('class_ids', 'class_name class_code');
+    ).populate("class_ids", "class_name class_code");
 
-    await Class.findByIdAndUpdate(
-      class_id,
-      { $pull: { student_ids: studentId } }
-    );
+    await Class.findByIdAndUpdate(class_id, {
+      $pull: { student_ids: studentId },
+    });
 
     res.status(200).json({
       message: "Successfully unregistered from class",
-      student: updatedStudent
+      student: updatedStudent,
     });
   } catch (err) {
     console.error(err);
