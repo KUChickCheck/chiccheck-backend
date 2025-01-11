@@ -12,7 +12,7 @@ const {
 } = require('../Controller/studentController');
 
 router.get('/', authenticateToken('teacher'), getAllStudents);
-router.get('/:id', authenticateToken('teacher'), getStudentById);
+router.get('/:id', authenticateToken('student'), getStudentById);
 router.post('/', authenticateToken('teacher'), createStudent);
 router.put('/:id', authenticateToken('teacher'), updateStudent);
 router.delete('/:id', authenticateToken('teacher'), deleteStudent);

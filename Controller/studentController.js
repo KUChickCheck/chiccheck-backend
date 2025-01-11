@@ -15,10 +15,15 @@ exports.getAllStudents = async (req, res) => {
 // GET a single student by ID
 exports.getStudentById = async (req, res) => {
   try {
+    if (req.params.id !== req.user.studentId) {
+      return res.status(403).json({ message: "Access forbidden: You can only access your own data." });
+    }
+
     const student = await Student.findById(req.params.id);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
+    
     res.status(200).json(student);
   } catch (err) {
     console.error(err);
