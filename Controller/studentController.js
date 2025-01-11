@@ -19,11 +19,11 @@ exports.getStudentById = async (req, res) => {
       return res.status(403).json({ message: "Access forbidden: You can only access your own data." });
     }
 
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id).populate("class_ids");
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
-    
+
     res.status(200).json(student);
   } catch (err) {
     console.error(err);
