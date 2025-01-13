@@ -11,7 +11,7 @@ exports.faceVerify = async (req, res) => {
         }
     
         // Step 1: Get the access token
-        const accessTokenResponse = await axios.post(`${process.env.KU_API}/kuedu/api/face/verify`, {
+        const accessTokenResponse = await axios.post(`${process.env.KU_API}/kuedu/api/token/pair`, {
           username: process.env.KU_USERNAME,
           password: process.env.KU_PASSWORD
         });
@@ -21,7 +21,7 @@ exports.faceVerify = async (req, res) => {
     
         // Step 2: Use the access token to pair token
         const response = await axios.post(
-          `${process.env.KU_API}/kuedu/api/token/pair`,
+          `${process.env.KU_API}/kuedu/api/face/verify`,
           { student_code, photo },
           {
             headers: {
