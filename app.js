@@ -27,9 +27,14 @@ const swaggerOptions = {
         "API documentation for managing students, classes, teachers, attendance, and authentication.", // Description
     },
     servers: [
-      {
-        url: "http://localhost:3000", // Your API base URL
-      },
+        {
+            url: "http://localhost:3000",
+            description: "Development Server",
+          },
+          {
+            url: "https://breezejirasak.com/api",
+            description: "Staging Server",
+          },
     ],
     tags: [
       {
@@ -39,6 +44,10 @@ const swaggerOptions = {
       {
         name: "Attendance",
         description: "Operations related to attendance management",
+      },
+      {
+        name: "Face Verification",
+        description: "Endpoints for face verification"
       },
       {
         name: "Students",
@@ -87,6 +96,7 @@ app.use("/api/student", studentRoute);
 app.use("/api/class", classRoute);
 app.use("/api/teacher", teacherRoute);
 app.use("/api/attendance", attendanceRoute);
+app.use("/api/face", attendanceRoute);
 
 // Setup cron jobs
 setupCronJobs();
