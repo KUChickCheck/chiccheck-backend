@@ -17,6 +17,7 @@ exports.faceVerify = async (req, res) => {
         });
     
         const accessToken = accessTokenResponse.data.access;
+        console.log(accessToken)
     
         // Step 2: Use the access token to pair token
         const response = await axios.post(
@@ -28,6 +29,8 @@ exports.faceVerify = async (req, res) => {
             }
           }
         );
+
+        console.log(response)
     
         // Respond with the data from the pair token API
         res.status(200).json(response.data);
