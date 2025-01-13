@@ -8,6 +8,7 @@ const studentRoute = require("./Route/studentRoute");
 const classRoute = require("./Route/classRoute");
 const teacherRoute = require("./Route/teacherRoute");
 const attendanceRoute = require("./Route/attendanceRoute");
+const faceRoute = require("./Route/faceRoute");
 const { setupCronJobs } = require("./cronJobs");
 
 // Initialize Express app
@@ -100,7 +101,7 @@ app.use("/api/student", studentRoute);
 app.use("/api/class", classRoute);
 app.use("/api/teacher", teacherRoute);
 app.use("/api/attendance", attendanceRoute);
-app.use("/api/face", attendanceRoute);
+app.use("/api/face", faceRoute);
 
 // Setup cron jobs
 setupCronJobs();
