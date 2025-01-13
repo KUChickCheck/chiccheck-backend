@@ -86,8 +86,12 @@ const swaggerSpec = swaggerJSDoc(swaggerOptions);
 // Setup Swagger UI for API documentation
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+
+
 // Middleware
-app.use(express.json());
+// Configure body parser to handle large payloads
+app.use(express.json({ limit: "100mb" })); // Adjust the limit as needed
+app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 app.use(cors());
 
 // Routes
