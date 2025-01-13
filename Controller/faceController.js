@@ -17,7 +17,6 @@ exports.faceVerify = async (req, res) => {
         });
     
         const accessToken = accessTokenResponse.data.access;
-        console.log(accessToken)
     
         // Step 2: Use the access token to pair token
         const response = await axios.post(

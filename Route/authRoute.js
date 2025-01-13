@@ -1,12 +1,13 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const bodyParser = require('body-parser');
+const bodyParser = require("body-parser");
 const {
   registerStudent,
   loginStudent,
   registerTeacher,
-  loginTeacher
-} = require('../Controller/authController');
+  loginTeacher,
+  verifyToken,
+} = require("../Controller/authController");
 const jsonParser = bodyParser.json();
 
 /**
@@ -50,7 +51,7 @@ const jsonParser = bodyParser.json();
  *       400:
  *         description: Invalid input data
  */
-router.post('/student/register', jsonParser, registerStudent);
+router.post("/student/register", jsonParser, registerStudent);
 
 /**
  * @swagger
@@ -76,7 +77,7 @@ router.post('/student/register', jsonParser, registerStudent);
  *       400:
  *         description: Invalid credentials
  */
-router.post('/student/login', jsonParser, loginStudent);
+router.post("/student/login", jsonParser, loginStudent);
 
 /**
  * @swagger
@@ -112,7 +113,7 @@ router.post('/student/login', jsonParser, loginStudent);
  *       400:
  *         description: Invalid input data
  */
-router.post('/teacher/register', jsonParser, registerTeacher);
+router.post("/teacher/register", jsonParser, registerTeacher);
 
 /**
  * @swagger
@@ -138,6 +139,66 @@ router.post('/teacher/register', jsonParser, registerTeacher);
  *       400:
  *         description: Invalid credentials
  */
-router.post('/teacher/login', jsonParser, loginTeacher);
+router.post("/teacher/login", jsonParser, loginTeacher);
+
+/**
+ * @swagger
+ * /api/auth/verify-token:
+ *   post:
+ *     summary: Verify a user token
+ *     description: Validates the token for a student or teacher based on the provided role.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 description: The role of the user (student or teacher).
+ *                 enum:
+ *                   - student
+ *                   - teacher
+ *     responses:
+ *       200:
+ *         description: Token is valid.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 valid:
+ *                   type: boolean
+ *                   description: Indicates whether the token is valid.
+ *               example:
+ *                 valid: true
+ *       400:
+ *         description: Role mismatch or invalid token.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 valid:
+ *                   type: boolean
+ *                   description: Indicates whether the token is valid.
+ *               example:
+ *                 valid: false
+ *       401:
+ *         description: Unauthorized, token is missing or invalid.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 valid:
+ *                   type: boolean
+ *                   description: Indicates whether the token is valid.
+ *               example:
+ *                 valid: false
+ */
+ router.post("/verify-token", jsonParser, verifyToken);
 
 module.exports = router;
