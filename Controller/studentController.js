@@ -229,3 +229,104 @@ exports.unregisterClass = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+
+// Register student to a class
+exports.registerClassByClassCode = async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const { class_code } = req.body;
+
+    // Ensure student can only register themselves
+    if (studentId !== req.user.studentId) {
+      return res
+        .status(403)
+        .json({ message: "You can only register yourself for classes" });
+    }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const classExists = await Class.findOne({class_code: class_code});
+    if (!classExists) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    if (student.class_ids.includes(classExists._id)) {
+      return res
+        .status(400)
+        .json({ message: "You are already registered to this class" });
+    }
+
+    // Update both student and class documents
+    const updatedStudent = await Student.findByIdAndUpdate(
+      studentId,
+      { $push: { class_ids: classExists._id } },
+      { new: true }
+    ).populate("class_ids", "class_name class_code");
+
+    await Class.findByIdAndUpdate(classExists._id, {
+      $push: { student_ids: studentId },
+    });
+
+    res.status(200).json({
+      message: "Successfully registered to class",
+      student: updatedStudent,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Unregister student from a class
+exports.unregisterClassByClassCode = async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const { class_code } = req.body;
+
+    // Ensure student can only unregister themselves
+    if (studentId !== req.user.studentId) {
+      return res
+        .status(403)
+        .json({ message: "You can only unregister yourself from classes" });
+    }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const classExists = await Class.findOne({class_code: class_code});
+    if (!classExists) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    if (!student.class_ids.includes(classExists._id)) {
+      return res
+        .status(400)
+        .json({ message: "You are not registered to this class" });
+    }
+
+    // Update both student and class documents
+    const updatedStudent = await Student.findByIdAndUpdate(
+      studentId,
+      { $pull: { class_ids: classExists._id } },
+      { new: true }
+    ).populate("class_ids", "class_name class_code");
+
+    await Class.findByIdAndUpdate(classExists._id, {
+      $pull: { student_ids: studentId },
+    });
+
+    res.status(200).json({
+      message: "Successfully unregistered from class",
+      student: updatedStudent,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
