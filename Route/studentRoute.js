@@ -8,7 +8,9 @@ const {
   updateStudent,
   deleteStudent,
   registerClass,
-  unregisterClass
+  unregisterClass,
+  registerClassByClassCode,
+  unregisterClassByClassCode
 } = require('../Controller/studentController');
 
 /**
