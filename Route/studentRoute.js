@@ -244,4 +244,70 @@ router.post('/:id/register-class', authenticateToken('student'), registerClass);
  */
 router.post('/:id/unregister-class', authenticateToken('student'), unregisterClass);
 
+/**
+ * @swagger
+ * /api/student/{id}/enroll:
+ *   post:
+ *     summary: Register student to class
+ *     description: This endpoint allows a student to register for a class.
+ *     tags: [Students]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         description: Student's ID
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               class_ids:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Student registered to class successfully
+ *       404:
+ *         description: Class or student not found
+ */
+
+router.post('/:id/enroll', authenticateToken('student'), registerClassByClassCode);
+/**
+ * @swagger
+ * /api/student/{id}/unenroll:
+ *   post:
+ *     summary: Unregister student from class
+ *     description: This endpoint allows a student to unregister from a class.
+ *     tags: [Students]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         description: Student's ID
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               class_ids:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Student unregistered from class successfully
+ *       404:
+ *         description: Class or student not found
+ */
+router.post('/:id/unenroll', authenticateToken('student'), unregisterClassByClassCode);
+
 module.exports = router;
