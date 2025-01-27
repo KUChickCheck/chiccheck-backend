@@ -45,7 +45,7 @@ exports.markAttendance = async (req, res) => {
     const classDays = classDetails.schedule.days.split(',').map(day => day.trim().toLowerCase());
     const today = currentMoment.format('dddd').toLowerCase();
     if (!classDays.includes(today)) {
-      return res.status(400).json({ message: "No class scheduled for today" });
+      return res.status(400).json({ message: "No class scheduled for today", today: today, class_day: classDays });
     }
 
     // Determine attendance status based on time
