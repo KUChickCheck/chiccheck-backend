@@ -8,9 +8,9 @@ exports.markAttendance = async (req, res) => {
     const { student_id, class_id, photo } = req.body;
     const currentTime = new Date();
 
-    if (!photo) {
-      return res.status(400).json({ message: "photo are required" });
-    }
+    // if (!photo) {
+    //   return res.status(400).json({ message: "photo are required" });
+    // }
 
     // Check if student exists
     const student = await Student.findById(student_id);
@@ -29,10 +29,10 @@ exports.markAttendance = async (req, res) => {
       return res.status(400).json({ message: "Student is not enrolled in this class" });
     }
 
-    const verificationResult = await verifyFace(student.student_id, photo);
-    if (!verificationResult || !verificationResult.valid) {
-      return res.status(400).json({ message: "Face verification failed" });
-    }
+    // const verificationResult = await verifyFace(student.student_id, photo);
+    // if (!verificationResult || !verificationResult.valid) {
+    //   return res.status(400).json({ message: "Face verification failed" });
+    // }
 
     // Parse class times
     const classDate = moment(currentTime).format('YYYY-MM-DD');
