@@ -1,7 +1,7 @@
 const Attendance = require('../Schema/attendanceSchema');
 const Class = require('../Schema/classSchema');
 const Student = require('../Schema/studentSchema');
-const moment = require('moment');
+const moment = require('moment-timezone');
 
 exports.markAttendance = async (req, res) => {
   try {
@@ -39,7 +39,7 @@ exports.markAttendance = async (req, res) => {
     const classStartTime = moment(`${classDate} ${classDetails.schedule.start_time}`, 'YYYY-MM-DD HH:mm');
     const classEndTime = moment(`${classDate} ${classDetails.schedule.end_time}`, 'YYYY-MM-DD HH:mm');
     const lateAllowanceTime = moment(classStartTime).add(classDetails.schedule.late_allowance_minutes, 'minutes');
-    const currentMoment = moment(currentTime);
+    const currentMoment = moment.tz(currentTime, "Asia/Bangkok");
 
     // Check if today is a class day
     const classDays = classDetails.schedule.days.split(',').map(day => day.trim().toLowerCase());
