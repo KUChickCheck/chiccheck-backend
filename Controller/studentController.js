@@ -31,7 +31,7 @@ exports.getStudentEnrollClasses = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    res.status(200).json(student);
+    res.status(200).json(student.class_ids);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });
