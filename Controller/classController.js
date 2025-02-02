@@ -13,6 +13,17 @@ exports.getAllClasses = async (req, res) => {
   }
 };
 
+exports.getAllClassesName = async (req, res) => {
+  try {
+    const classes = await Class.find({}, "_id class_name");
+    res.status(200).json(classes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
 // Get class by ID with populated teachers and students
 exports.getClassById = async (req, res) => {
   try {
