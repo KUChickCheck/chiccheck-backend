@@ -6,7 +6,8 @@ const {
   getClassAttendance,
   getStudentAttendance,
   markAbsentForMissingStudents,
-  getClassAttendanceByDate
+  getClassAttendanceByDate,
+  getStudentClassReport
 } = require('../Controller/attendanceController');
 
 /**
@@ -142,5 +143,51 @@ router.post('/mark-absent', authenticateToken('teacher'), markAbsentForMissingSt
  *         description: Class or attendance records not found
  */
 router.get('/class/:class_id/date/:date', authenticateToken('teacher'), getClassAttendanceByDate);
+
+/**
+ * @swagger
+ * /api/attendance/report/{student_id}/{class_id}:
+ *   get:
+ *     summary: Get attendance report summary for a student in a specific class
+ *     description: This endpoint retrieves attendance statistics including total classes, ontime, late, and absent counts. Accessible by both teachers and the student themselves.
+ *     tags: [Attendance]
+ *     parameters:
+ *       - name: student_id
+ *         in: path
+ *         description: The student ID to get report for
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: class_id
+ *         in: path
+ *         description: The class ID to get report for
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Student's attendance report summary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 class_name:
+ *                   type: string
+ *                 report:
+ *                   type: object
+ *                   properties:
+ *                     total_classes:
+ *                       type: number
+ *                     ontime:
+ *                       type: number
+ *                     late:
+ *                       type: number
+ *                     absent:
+ *                       type: number
+ *       404:
+ *         description: Student or class not found
+ */
+router.get('/report/:student_id/:class_id', authenticateToken(['teacher', 'student']), getStudentClassReport);
 
 module.exports = router;

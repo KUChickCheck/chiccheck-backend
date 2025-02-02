@@ -251,3 +251,95 @@ exports.getClassAttendanceByDate = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+exports.getStudentClassReport = async (req, res) => {
+    try {
+        const { student_id, class_id } = req.params;
+
+        if (req.user.role === 'student' && req.user.studentId !== student_id) {
+            return res.status(403).json({ message: "You can only view your own attendance report" });
+        }
+
+        const student = await Student.findById(student_id);
+        if (!student) {
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        const classDetails = await Class.findById(class_id);
+        if (!classDetails) {
+            return res.status(404).json({ message: "Class not found" });
+        }
+
+        // Get all attendance records for this student in this class
+        const attendanceRecords = await Attendance.find({
+            student_id,
+            class_id
+        }).lean(); // Add lean() for better performance
+
+        // Calculate total classes first
+        const startDate = classDetails.created_at;
+        const currentDate = new Date();
+        const total_classes = await calculateTotalClasses(classDetails, startDate, currentDate);
+
+        // Initialize report
+        const report = {
+            total_classes: total_classes,
+            ontime: 0,
+            late: 0,
+            absent: 0
+        };
+
+        // Count actual attendance
+        attendanceRecords.forEach(record => {
+            switch (record.status.toLowerCase()) {
+                case 'present':
+                    report.ontime++;
+                    break;
+                case 'late':
+                    report.late++;
+                    break;
+                case 'absent':
+                    report.absent++;
+                    break;
+            }
+        });
+
+        // Calculate missing absences
+        // If total_classes is more than the sum of all attendance records,
+        // the difference should be counted as absences
+        const totalRecorded = report.ontime + report.late + report.absent;
+        if (report.total_classes > totalRecorded) {
+            report.absent += (report.total_classes - totalRecorded);
+        }
+
+        res.status(200).json({
+            class_name: classDetails.class_name,
+            report: report
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
+// Helper function to calculate total classes
+const calculateTotalClasses = async (classDetails, startDate, currentDate) => {
+    const classDays = classDetails.schedule.days.toLowerCase().split(',').map(day => day.trim());
+
+    let totalClasses = 0;
+    let currentDay = new Date(startDate);
+
+    while (currentDay <= currentDate) {
+        // Get day name in lowercase (e.g., 'monday', 'tuesday', etc.)
+        const dayName = currentDay.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+        if (classDays.includes(dayName)) {
+            totalClasses++;
+        }
+        // Move to next day
+        currentDay.setDate(currentDay.getDate() + 1);
+    }
+
+    return totalClasses;
+};
