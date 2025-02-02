@@ -7,7 +7,6 @@ const {
   createClass,
   updateClass,
   deleteClass,
-  getAllClassesName
 } = require('../Controller/classController');
 
 /**
@@ -72,7 +71,6 @@ router.post('/', authenticateToken('teacher'), createClass);
  *                     type: string
  */
 router.get('/', authenticateToken('teacher'), getAllClasses);
-router.get('/classesname', authenticateToken('student'), getAllClassesName);
 
 /**
  * @swagger

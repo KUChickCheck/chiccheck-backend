@@ -12,6 +12,32 @@ exports.getAllStudents = async (req, res) => {
   }
 };
 
+exports.getStudentEnrollClasses = async (req, res) => {
+  try {
+    if (req.params.id !== req.user.studentId) {
+      return res
+        .status(403)
+        .json({
+          message: "Access forbidden: You can only access your own data.",
+        });
+    }
+
+    const student = await Student.findById(req.params.id).populate({
+      path: "class_ids",
+      select: "_id class_name", // Only fetch _id and name
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    res.status(200).json(student);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
 // GET a single student by ID
 exports.getStudentById = async (req, res) => {
   try {

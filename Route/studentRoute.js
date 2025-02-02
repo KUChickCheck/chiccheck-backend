@@ -10,7 +10,8 @@ const {
   registerClass,
   unregisterClass,
   registerClassByClassCode,
-  unregisterClassByClassCode
+  unregisterClassByClassCode,
+  getStudentEnrollClasses
 } = require('../Controller/studentController');
 
 /**
@@ -86,6 +87,8 @@ router.get('/', authenticateToken('teacher'), getAllStudents);
  *         description: Student not found
  */
 router.get('/:id', authenticateToken('student'), getStudentById);
+
+router.get('/enrolled/:id', authenticateToken('student'), getStudentEnrollClasses);
 
 /**
  * @swagger
