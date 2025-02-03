@@ -2,8 +2,36 @@ const Attendance = require('../Schema/attendanceSchema');
 const Class = require('../Schema/classSchema');
 const Student = require('../Schema/studentSchema');
 const moment = require('moment-timezone');
-const { verifyFace } = require('./faceController')
+const axios = require("axios");
+require('dotenv').config();
 
+async function verifyFace(student_code, photo) {
+  try {
+    // Step 1: Get the access token
+    const accessTokenResponse = await axios.post(`${process.env.KU_API}/kuedu/api/token/pair`, {
+      username: process.env.KU_USERNAME,
+      password: process.env.KU_PASSWORD
+    });
+
+    const accessToken = accessTokenResponse.data.access;
+
+    // Step 2: Use the access token to pair token
+    const response = await axios.post(
+      `${process.env.KU_API}/kuedu/api/face/verify`,
+      { student_code, photo },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      }
+    );
+
+    return response.data; // Return the verification result
+  } catch (error) {
+    console.error("Error in verifyFace:", error.message);
+    throw error.response?.data || new Error("An error occurred during face verification");
+  }
+}
 
 exports.markAttendance = async (req, res) => {
   try {
