@@ -13,7 +13,7 @@ exports.markAttendance = async (req, res) => {
       return res
         .status(403)
         .json({
-          message: "Access forbidden: You can not check attendance for others.",
+          message: "Access forbidden: You can not mark attendance for others.",
         });
     }
 
