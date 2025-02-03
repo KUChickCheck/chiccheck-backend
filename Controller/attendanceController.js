@@ -311,16 +311,16 @@ exports.getStudentClassReport = async (req, res) => {
             return res.status(404).json({ message: "Class not found" });
         }
 
+        // Calculate total classes first
+        const startDate = classDetails.created_at;
+        const currentDate = new Date();
+        const total_classes = await calculateTotalClasses(classDetails, startDate, currentDate);
+
         // Get all attendance records for this student in this class
         const attendanceRecords = await Attendance.find({
             student_id,
             class_id
         }).lean();
-
-        // Calculate total classes first
-        const startDate = classDetails.created_at;
-        const currentDate = new Date();
-        const total_classes = await calculateTotalClasses(classDetails, startDate, currentDate);
 
         // Initialize report
         const report = {
@@ -330,31 +330,25 @@ exports.getStudentClassReport = async (req, res) => {
             absent: 0
         };
 
-        // Get all class dates up to now
-        const classDates = await getAllClassDates(classDetails, startDate, currentDate);
-
-        // Create a map of attendance by date
-        const attendanceByDate = {};
+        // Count actual attendance records
         attendanceRecords.forEach(record => {
-            const date = moment(record.timestamp).format('YYYY-MM-DD');
-            attendanceByDate[date] = record.status;
-        });
-
-        // Count attendance for each class date
-        classDates.forEach(date => {
-            const status = attendanceByDate[date] || 'Absent';
-            switch(status.toLowerCase()) {
-                case 'present':
+            switch (record.status) {
+                case 'Present':
                     report.ontime++;
                     break;
-                case 'late':
+                case 'Late':
                     report.late++;
                     break;
-                case 'absent':
+                case 'Absent':
                     report.absent++;
                     break;
             }
         });
+
+        // If no attendance record found for today's class, mark as absent
+        if (report.ontime + report.late + report.absent < total_classes) {
+            report.absent = total_classes - (report.ontime + report.late);
+        }
 
         res.status(200).json({
             class_name: classDetails.class_name,
@@ -367,22 +361,6 @@ exports.getStudentClassReport = async (req, res) => {
     }
 };
 
-// Helper function to get all class dates
-const getAllClassDates = async (classDetails, startDate, currentDate) => {
-    const classDays = classDetails.schedule.days.toLowerCase().split(',').map(day => day.trim());
-    const dates = [];
-    let currentDay = moment(startDate);
-    const endDay = moment(currentDate);
-
-    while (currentDay.isSameOrBefore(endDay, 'day')) {
-        if (classDays.includes(currentDay.format('dddd').toLowerCase())) {
-            dates.push(currentDay.format('YYYY-MM-DD'));
-        }
-        currentDay.add(1, 'day');
-    }
-
-    return dates;
-};
 
 // Helper function to calculate total classes
 const calculateTotalClasses = async (classDetails, startDate, currentDate) => {
