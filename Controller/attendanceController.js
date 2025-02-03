@@ -69,8 +69,7 @@ exports.markAttendance = async (req, res) => {
     }
 
     const verificationResult = await verifyFace(student.student_id, photo);
-    console.log(verificationResult)
-    if (!verificationResult || !verificationResult.valid) {
+    if (!verificationResult || !verificationResult.match) {
       return res.status(400).json({ message: "Face verification failed" });
     }
 
