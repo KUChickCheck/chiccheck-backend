@@ -69,6 +69,7 @@ exports.markAttendance = async (req, res) => {
     }
 
     const verificationResult = await verifyFace(student.student_id, photo);
+    consoloe.log(verificationResult)
     if (!verificationResult || !verificationResult.valid) {
       return res.status(400).json({ message: "Face verification failed" });
     }
