@@ -9,6 +9,9 @@ exports.markAttendance = async (req, res) => {
     const { student_id, class_id, photo } = req.body;
     const currentTime = new Date();
 
+    console.log(student_id)
+    console.log(req.user.studentId)
+
     if (student_id !== req.user.studentId) {
       return res
         .status(403)
