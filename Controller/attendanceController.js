@@ -98,17 +98,23 @@ exports.markAttendance = async (req, res) => {
     }
 
     // Check for existing attendance record
+    const todayStart = moment().tz("Asia/Bangkok").startOf('day');
+    const todayEnd = moment().tz("Asia/Bangkok").endOf('day');
+
     const existingAttendance = await Attendance.findOne({
       student_id,
       class_id,
       timestamp: {
-        $gte: moment(classDate).startOf('day'),
-        $lte: moment(classDate).endOf('day')
+        $gte: todayStart.toDate(),
+        $lte: todayEnd.toDate()
       }
     });
 
     if (existingAttendance) {
-      return res.status(400).json({ message: "Attendance already marked for this class today" });
+      return res.status(400).json({
+        message: "Attendance already marked for this class today",
+        existing: existingAttendance
+      });
     }
 
     // Create attendance record
