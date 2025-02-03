@@ -7,11 +7,17 @@ require('dotenv').config();
 
 async function verifyFace(student_code, photo) {
   try {
+    console.log(photo)
+    console.log(process.env.KU_API)
+    console.log(process.env.KU_USERNAME)
+    console.log(process.env.KU_PASSWORD)
     // Step 1: Get the access token
     const accessTokenResponse = await axios.post(`${process.env.KU_API}/kuedu/api/token/pair`, {
       username: process.env.KU_USERNAME,
       password: process.env.KU_PASSWORD
     });
+
+    console.log(accessTokenResponse)
 
     const accessToken = accessTokenResponse.data.access;
 
@@ -25,6 +31,7 @@ async function verifyFace(student_code, photo) {
         }
       }
     );
+    console.log(response)
 
     return response.data; // Return the verification result
   } catch (error) {
