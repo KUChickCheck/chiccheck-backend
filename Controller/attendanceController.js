@@ -2,15 +2,14 @@ const Attendance = require('../Schema/attendanceSchema');
 const Class = require('../Schema/classSchema');
 const Student = require('../Schema/studentSchema');
 const moment = require('moment-timezone');
+const { verifyFace } = require('./faceController')
+
 
 exports.markAttendance = async (req, res) => {
   try {
     
     const { student_id, class_id, photo } = req.body;
     const currentTime = new Date();
-
-    console.log(student_id)
-    console.log(req.user.studentId)
 
     if (student_id !== req.user.studentId) {
       return res
