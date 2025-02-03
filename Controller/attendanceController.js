@@ -74,9 +74,9 @@ exports.markAttendance = async (req, res) => {
     }
 
     // Parse class times
-    const classDate = moment(currentTime).format('YYYY-MM-DD');
-    const classStartTime = moment(`${classDate} ${classDetails.schedule.start_time}`, 'YYYY-MM-DD HH:mm');
-    const classEndTime = moment(`${classDate} ${classDetails.schedule.end_time}`, 'YYYY-MM-DD HH:mm');
+    const classDate = moment(currentTime).tz("Asia/Bangkok").format('YYYY-MM-DD');
+    const classStartTime = moment.tz(`${classDate} ${classDetails.schedule.start_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok");
+    const classEndTime = moment.tz(`${classDate} ${classDetails.schedule.end_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok");
     const lateAllowanceTime = moment(classStartTime).add(classDetails.schedule.late_allowance_minutes, 'minutes');
     const currentMoment = moment.tz(currentTime, "Asia/Bangkok");
 
@@ -295,10 +295,6 @@ exports.getStudentClassReport = async (req, res) => {
     try {
         const { student_id, class_id } = req.params;
 
-        if (req.user.role === 'student' && req.user.studentId !== student_id) {
-            return res.status(403).json({ message: "You can only view your own attendance report" });
-        }
-
         const student = await Student.findById(student_id);
         if (!student) {
             return res.status(404).json({ message: "Student not found" });
@@ -313,7 +309,7 @@ exports.getStudentClassReport = async (req, res) => {
         const attendanceRecords = await Attendance.find({
             student_id,
             class_id
-        }).lean(); // Add lean() for better performance
+        }).lean();
 
         // Calculate total classes first
         const startDate = classDetails.created_at;
@@ -328,9 +324,20 @@ exports.getStudentClassReport = async (req, res) => {
             absent: 0
         };
 
-        // Count actual attendance
+        // Get all class dates up to now
+        const classDates = await getAllClassDates(classDetails, startDate, currentDate);
+
+        // Create a map of attendance by date
+        const attendanceByDate = {};
         attendanceRecords.forEach(record => {
-            switch (record.status.toLowerCase()) {
+            const date = moment(record.timestamp).format('YYYY-MM-DD');
+            attendanceByDate[date] = record.status;
+        });
+
+        // Count attendance for each class date
+        classDates.forEach(date => {
+            const status = attendanceByDate[date] || 'Absent';
+            switch(status.toLowerCase()) {
                 case 'present':
                     report.ontime++;
                     break;
@@ -343,14 +350,6 @@ exports.getStudentClassReport = async (req, res) => {
             }
         });
 
-        // Calculate missing absences
-        // If total_classes is more than the sum of all attendance records,
-        // the difference should be counted as absences
-        const totalRecorded = report.ontime + report.late + report.absent;
-        if (report.total_classes > totalRecorded) {
-            report.absent += (report.total_classes - totalRecorded);
-        }
-
         res.status(200).json({
             class_name: classDetails.class_name,
             report: report
@@ -362,22 +361,48 @@ exports.getStudentClassReport = async (req, res) => {
     }
 };
 
+// Helper function to get all class dates
+const getAllClassDates = async (classDetails, startDate, currentDate) => {
+    const classDays = classDetails.schedule.days.toLowerCase().split(',').map(day => day.trim());
+    const dates = [];
+    let currentDay = moment(startDate);
+    const endDay = moment(currentDate);
+
+    while (currentDay.isSameOrBefore(endDay, 'day')) {
+        if (classDays.includes(currentDay.format('dddd').toLowerCase())) {
+            dates.push(currentDay.format('YYYY-MM-DD'));
+        }
+        currentDay.add(1, 'day');
+    }
+
+    return dates;
+};
+
 // Helper function to calculate total classes
 const calculateTotalClasses = async (classDetails, startDate, currentDate) => {
     const classDays = classDetails.schedule.days.toLowerCase().split(',').map(day => day.trim());
+    const currentMoment = moment().tz("Asia/Bangkok");
 
     let totalClasses = 0;
-    let currentDay = new Date(startDate);
+    let currentDay = moment(startDate).tz("Asia/Bangkok").startOf('day');
 
-    while (currentDay <= currentDate) {
-        // Get day name in lowercase (e.g., 'monday', 'tuesday', etc.)
-        const dayName = currentDay.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    while (currentDay.isSameOrBefore(currentMoment, 'day')) {
+        const dayName = currentDay.format('dddd').toLowerCase();
 
         if (classDays.includes(dayName)) {
-            totalClasses++;
+            // Create class start time for this day
+            const classStartTime = moment.tz(
+                `${currentDay.format('YYYY-MM-DD')} ${classDetails.schedule.start_time}`,
+                'YYYY-MM-DD HH:mm',
+                "Asia/Bangkok"
+            );
+
+            // Only count if class start time has passed
+            if (classStartTime.isBefore(currentMoment)) {
+                totalClasses++;
+            }
         }
-        // Move to next day
-        currentDay.setDate(currentDay.getDate() + 1);
+        currentDay.add(1, 'day');
     }
 
     return totalClasses;
