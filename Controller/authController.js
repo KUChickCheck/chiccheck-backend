@@ -2,6 +2,7 @@ const Student = require("../Schema/studentSchema");
 const Teacher = require("../Schema/teacherSchema");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
 // Student Registration
 exports.registerStudent = async (req, res) => {
@@ -49,7 +50,7 @@ exports.registerStudent = async (req, res) => {
     const token = jwt.sign(
       { studentId: saveStudent._id },
       process.env.JWT_SECRET || "chickcheck",
-      { expiresIn: "1h" }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     res.status(201).json({ token, message: "Student registered successfully" });
@@ -82,7 +83,7 @@ exports.loginStudent = async (req, res) => {
     const token = jwt.sign(
       { studentId: student._id },
       process.env.JWT_SECRET || "chickcheck",
-      { expiresIn: "1h" }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     const { password, class_ids, created_at, __v, ...studentInfo } =
@@ -146,7 +147,7 @@ exports.registerTeacher = async (req, res) => {
     const token = jwt.sign(
       { teacherId: saveTeacher._id },
       process.env.JWT_SECRET || "chickcheck",
-      { expiresIn: "1h" }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     res.status(201).json({ token, message: "Teacher registered successfully" });
@@ -159,7 +160,7 @@ exports.registerTeacher = async (req, res) => {
 // Teacher Login
 exports.loginTeacher = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password: inputPassword } = req.body;
 
     const teacher = await Teacher.findOne({ username });
 
@@ -167,19 +168,22 @@ exports.loginTeacher = async (req, res) => {
       return res.status(400).json({ message: "Invalid username or password" });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, teacher.password);
+    const isPasswordValid = await bcrypt.compare(inputPassword, teacher.password);
 
     if (!isPasswordValid) {
       return res.status(400).json({ message: "Invalid username or password" });
     }
 
+    const { password, class_ids, created_at, __v, ...teacherInfo } =
+    teacher.toObject();
+
     const token = jwt.sign(
       { teacherId: teacher._id },
       process.env.JWT_SECRET || "chickcheck",
-      { expiresIn: "1h" }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
-    res.status(200).json({ token, message: "Teacher login successful" });
+    res.status(200).json({ token, user: teacherInfo, message: "Teacher login successful" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });
