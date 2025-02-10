@@ -145,7 +145,7 @@ exports.getTeacherClasses = async (req, res) => {
     const teacher = await Teacher.findById(teacherId)
       .populate({
         path: 'classes',
-        select: 'class_name class_code schedule'
+        select: '_id class_name class_code schedule'
       });
 
     if (!teacher) {

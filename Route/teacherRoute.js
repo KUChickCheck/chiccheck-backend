@@ -8,7 +8,8 @@ const {
   updateTeacher,
   deleteTeacher,
   assignToClass,
-  removeFromClass
+  removeFromClass,
+  getTeacherClasses
 } = require('../Controller/teacherController');
 
 /**
@@ -227,5 +228,7 @@ router.post('/:id/assign-class', authenticateToken('teacher'), assignToClass);
  *         description: Teacher or class not found
  */
 router.post('/:id/remove-class', authenticateToken('teacher'), removeFromClass);
+
+router.get('/:id/all-classes', authenticateToken('teacher'), getTeacherClasses);
 
 module.exports = router;
