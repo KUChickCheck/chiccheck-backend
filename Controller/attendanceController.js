@@ -237,7 +237,7 @@ exports.markAbsentForMissingStudents = async (req, res) => {
   }
 };
 
-exports.getStudentClassesByDate = async (req, res) => {
+exports.getClassAttendanceByDate = async (req, res) => {
     try {
         const { student_id, day } = req.params;
 
