@@ -237,64 +237,93 @@ exports.markAbsentForMissingStudents = async (req, res) => {
   }
 };
 
-exports.getClassAttendanceByDate = async (req, res) => {
-  try {
-    const { class_id, date } = req.params;
+exports.getStudentClassesByDay = async (req, res) => {
+    try {
+        const { student_id, day } = req.params;
 
-    const startOfDay = moment(date).tz("Asia/Bangkok").startOf('day');
-    const endOfDay = moment(date).tz("Asia/Bangkok").endOf('day');
+        const student = await Student.findById(student_id);
+        if (!student) {
+            return res.status(404).json({ message: "Student not found" });
+        }
 
-    const classDetails = await Class.findById(class_id)
-      .populate('student_ids', 'first_name last_name student_id');
+        const classes = await Class.find({
+            _id: { $in: student.class_ids },
+            'schedule.days': { $regex: day, $options: 'i' }
+        })
+        .populate('teacher_ids', 'first_name last_name')
+        .populate('student_ids')
+        .lean();
 
-    if (!classDetails) {
-      return res.status(404).json({ message: "Class not found" });
+        const today = moment().tz("Asia/Bangkok").format('YYYY-MM-DD');
+        const attendanceRecords = await Attendance.find({
+            student_id: student_id,
+            class_id: { $in: classes.map(c => c._id) },
+            timestamp: {
+                $gte: moment(today).tz("Asia/Bangkok").startOf('day'),
+                $lte: moment(today).tz("Asia/Bangkok").endOf('day')
+            }
+        }).lean();
+
+        const allClassAttendance = await Promise.all(classes.map(async (classItem) => {
+            const classAttendance = await Attendance.find({
+                class_id: classItem._id,
+                timestamp: {
+                    $gte: moment(today).tz("Asia/Bangkok").startOf('day'),
+                    $lte: moment(today).tz("Asia/Bangkok").endOf('day')
+                }
+            }).lean();
+            return {
+                class_id: classItem._id,
+                attendance: classAttendance
+            };
+        }));
+
+        const attendanceMap = {};
+        attendanceRecords.forEach(record => {
+            attendanceMap[record.class_id.toString()] = record.status;
+        });
+
+        let classesWithStatus = classes.map(classItem => {
+            const classStats = allClassAttendance
+                .find(ca => ca.class_id.toString() === classItem._id.toString())
+                ?.attendance || [];
+
+            const stats = {
+                total_students: classItem.student_ids.length,
+                ontime: classStats.filter(a => a.status === 'Present').length,
+                late: classStats.filter(a => a.status === 'Late').length,
+                absent: classStats.filter(a => a.status === 'Absent').length
+            };
+
+            return {
+                class_name: classItem.class_name,
+                class_id: classItem._id,
+                teachers: classItem.teacher_ids.map(teacher => ({
+                    id: teacher._id,
+                    name: `${teacher.first_name} ${teacher.last_name}`
+                })),
+                schedule: classItem.schedule,
+                status: attendanceMap[classItem._id.toString()] || 'Not checked',
+                statistics: stats
+            };
+        });
+
+        classesWithStatus.sort((a, b) => {
+            const aChecked = a.status !== 'Not checked';
+            const bChecked = b.status !== 'Not checked';
+
+            if (aChecked === bChecked) {
+                return a.schedule.start_time.localeCompare(b.schedule.start_time);
+            }
+            return aChecked ? 1 : -1;
+        });
+
+        res.status(200).json(classesWithStatus);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error" });
     }
-
-    const attendanceRecords = await Attendance.find({
-      class_id,
-      timestamp: {
-        $gte: startOfDay.toDate(),
-        $lte: endOfDay.toDate()
-      }
-    }).populate('student_id', 'first_name last_name student_id');
-
-    // Modified to include timestamp with Bangkok timezone
-    const attendanceMap = {};
-    attendanceRecords.forEach(record => {
-      attendanceMap[record.student_id._id.toString()] = {
-        status: record.status,
-        timestamp: moment(record.timestamp).tz("Asia/Bangkok").format()
-      };
-    });
-
-    // Modified to include timezone-adjusted timestamp in the output
-    const attendanceList = classDetails.student_ids.map(student => {
-      const attendanceInfo = attendanceMap[student._id.toString()] || {
-        status: 'Absent',
-        timestamp: null
-      };
-
-      return {
-        student_id: student.student_id,
-        first_name: student.first_name,
-        last_name: student.last_name,
-        status: attendanceInfo.status,
-        timestamp: attendanceInfo.timestamp
-      };
-    });
-
-    res.status(200).json({
-      class_name: classDetails.class_name,
-      class_code: classDetails.class_code,
-      date: moment(date).tz("Asia/Bangkok").format('YYYY-MM-DD'),
-      attendance: attendanceList
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
 };
 
 exports.getStudentClassReport = async (req, res) => {
