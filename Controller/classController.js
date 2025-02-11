@@ -1,5 +1,8 @@
 const Class = require('../Schema/classSchema');
 const Teacher = require('../Schema/teacherSchema');
+const Student = require('../Schema/studentSchema');
+const Attendance = require('../Schema/attendanceSchema');
+const moment = require('moment');
 
 exports.getAllClasses = async (req, res) => {
   try {
@@ -169,4 +172,74 @@ exports.deleteClass = async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Internal Server Error" });
   }
+};
+
+exports.getStudentClassesByDay = async (req, res) => {
+    try {
+        const { student_id, day } = req.params;
+
+        // Find student to verify existence
+        const student = await Student.findById(student_id);
+        if (!student) {
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        // Get all classes for this student
+        const classes = await Class.find({
+            _id: { $in: student.class_ids },
+            'schedule.days': { $regex: day, $options: 'i' }
+        })
+        .populate('teacher_ids', 'first_name last_name')
+        .lean();
+
+        // Get attendance records for today for these classes
+        const today = moment().format('YYYY-MM-DD');
+        const attendanceRecords = await Attendance.find({
+            student_id: student_id,
+            class_id: { $in: classes.map(c => c._id) },
+            timestamp: {
+                $gte: moment(today).startOf('day'),
+                $lte: moment(today).endOf('day')
+            }
+        }).lean();
+
+        // Create attendance map for quick lookup
+        const attendanceMap = {};
+        attendanceRecords.forEach(record => {
+            attendanceMap[record.class_id.toString()] = record.status;
+        });
+
+        // Format response data
+        let classesWithStatus = classes.map(classItem => ({
+            class_name: classItem.class_name,
+            class_id: classItem._id,
+            teachers: classItem.teacher_ids.map(teacher =>
+                `${teacher.first_name} ${teacher.last_name}`
+            ).join(', '),
+            schedule: classItem.schedule,
+            status: attendanceMap[classItem._id.toString()] || 'Not checked'
+        }));
+
+        // Sort classes:
+        // 1. Unchecked classes first, sorted by start time
+        // 2. Checked classes last, sorted by start time
+        classesWithStatus.sort((a, b) => {
+            const aChecked = a.status !== 'Not checked';
+            const bChecked = b.status !== 'Not checked';
+
+            if (aChecked === bChecked) {
+                // If both checked or both unchecked, sort by time
+                return a.schedule.start_time.localeCompare(b.schedule.start_time);
+            }
+
+            // Put unchecked first
+            return aChecked ? 1 : -1;
+        });
+
+        res.status(200).json(classesWithStatus);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
 };

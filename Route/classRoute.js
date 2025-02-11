@@ -7,6 +7,7 @@ const {
   createClass,
   updateClass,
   deleteClass,
+  getStudentClassesByDay,
 } = require('../Controller/classController');
 
 /**
@@ -165,5 +166,33 @@ router.put('/:id', authenticateToken('teacher'), updateClass);
  *         description: Class not found
  */
 router.delete('/:id', authenticateToken('teacher'), deleteClass);
+
+/**
+ * @swagger
+ * /api/class/student/{student_id}/day/{day}:
+ *   get:
+ *     summary: Get student's classes for a specific day
+ *     description: Retrieves all classes a student is registered for on a specific day with attendance status
+ *     tags: [Classes]
+ *     parameters:
+ *       - name: student_id
+ *         in: path
+ *         description: Student's ID
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - name: day
+ *         in: path
+ *         description: Day of the week (e.g., Monday, Tuesday)
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of classes with attendance status
+ *       404:
+ *         description: Student not found
+ */
+router.get('/student/:student_id/day/:day', authenticateToken('student'), getStudentClassesByDay);
 
 module.exports = router;
