@@ -241,8 +241,8 @@ exports.getClassAttendanceByDate = async (req, res) => {
   try {
     const { class_id, date } = req.params;
 
-    const startOfDay = moment(date).startOf('day');
-    const endOfDay = moment(date).endOf('day');
+    const startOfDay = moment(date).tz("Asia/Bangkok").startOf('day');
+    const endOfDay = moment(date).tz("Asia/Bangkok").endOf('day');
 
     const classDetails = await Class.findById(class_id)
       .populate('student_ids', 'first_name last_name student_id');
@@ -259,16 +259,16 @@ exports.getClassAttendanceByDate = async (req, res) => {
       }
     }).populate('student_id', 'first_name last_name student_id');
 
-    // Modified to include timestamp
+    // Modified to include timestamp with Bangkok timezone
     const attendanceMap = {};
     attendanceRecords.forEach(record => {
       attendanceMap[record.student_id._id.toString()] = {
         status: record.status,
-        timestamp: record.timestamp
+        timestamp: moment(record.timestamp).tz("Asia/Bangkok").format()
       };
     });
 
-    // Modified to include timestamp in the output
+    // Modified to include timezone-adjusted timestamp in the output
     const attendanceList = classDetails.student_ids.map(student => {
       const attendanceInfo = attendanceMap[student._id.toString()] || {
         status: 'Absent',
@@ -287,7 +287,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
     res.status(200).json({
       class_name: classDetails.class_name,
       class_code: classDetails.class_code,
-      date: date,
+      date: moment(date).tz("Asia/Bangkok").format('YYYY-MM-DD'),
       attendance: attendanceList
     });
 

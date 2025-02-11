@@ -213,9 +213,10 @@ exports.getStudentClassesByDay = async (req, res) => {
         let classesWithStatus = classes.map(classItem => ({
             class_name: classItem.class_name,
             class_id: classItem._id,
-            teachers: classItem.teacher_ids.map(teacher =>
-                `${teacher.first_name} ${teacher.last_name}`
-            ).join(', '),
+            teachers: classItem.teacher_ids.map(teacher => ({
+                id: teacher._id,
+                name: `${teacher.first_name} ${teacher.last_name}`
+            })),
             schedule: classItem.schedule,
             status: attendanceMap[classItem._id.toString()] || 'Not checked'
         }));
