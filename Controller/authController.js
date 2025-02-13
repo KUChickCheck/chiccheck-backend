@@ -69,9 +69,15 @@ exports.loginStudent = async (req, res) => {
     // First check if student exists in our database
     const student = await Student.findOne({ username });
 
+    console.log(student)
+
     if (student) {
       // Normal login process remains the same
       const isPasswordValid = await bcrypt.compare(password, student.password);
+
+      console.log(isPasswordValid)
+
+      console.log(student)
 
       if (!isPasswordValid) {
         return res.status(400).json({ message: "Invalid username or password" });
