@@ -69,18 +69,9 @@ exports.loginStudent = async (req, res) => {
     // First check if student exists in our database
     const student = await Student.findOne({ username });
 
-    console.log(student)
-
     if (student) {
       // Normal login process remains the same
       const isPasswordValid = await bcrypt.compare(password, student.password);
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      console.log(hashedPassword)
-      console.log(student.password)
-
-      console.log(student)
 
       if (!isPasswordValid) {
         return res.status(400).json({ message: "Invalid username or password" });
@@ -130,10 +121,9 @@ exports.loginStudent = async (req, res) => {
 
           // Create new student
           const tempEmail = `${username}@temp.chickcheck.com`;
-          const hashedPassword = await bcrypt.hash(password, 10);
           const newStudent = new Student({
             username,
-            password: hashedPassword,
+            password: password,
             student_id: username,
             first_name: "KU",
             last_name: "Student",
