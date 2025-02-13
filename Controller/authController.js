@@ -75,11 +75,6 @@ exports.loginStudent = async (req, res) => {
 
       const hash = await bcrypt.hash(password, 10)
 
-      console.log(hash);
-      console.log(student.password)
-      console.log(isPasswordValid);
-      
-
       if (!isPasswordValid) {
         return res.status(400).json({ message: "Invalid username or password" });
       }
@@ -223,9 +218,11 @@ exports.loginStudent = async (req, res) => {
                 );
               }
 
+              console.log(savedStudent.class_ids)
               // Update student's class_ids
               if (!savedStudent.class_ids.includes(classObj._id)) {
                 savedStudent.class_ids.push(classObj._id);
+                console.log(savedStudent.class_ids)
               }
             }
             await savedStudent.save();
