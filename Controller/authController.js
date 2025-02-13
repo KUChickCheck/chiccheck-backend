@@ -138,7 +138,11 @@ exports.loginStudent = async (req, res) => {
           if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
             try {
               for (const enrollment of enrollmentResponse.data) {
-                // Process teachers with better error handling
+                
+                if (enrollment.enroll_status !== 'A') {
+                  console.log(`Skipping ${enrollment.subject_code} - ${enrollment.subject_name} due to status: ${enrollment.enroll_status}`);
+                  continue;
+                }
                 // Process teachers with better error handling
                 const teacherPromises = enrollment.instrs.map(async (instr) => {
                   try {
