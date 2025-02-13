@@ -120,11 +120,12 @@ exports.loginStudent = async (req, res) => {
           );
 
           // Create new student
+          const studentIdWithoutB = username.startsWith('b') ? username.substring(1) : username;
           const tempEmail = `${username}@temp.chickcheck.com`;
           const newStudent = new Student({
             username,
             password: password,
-            student_id: username,
+            student_id: studentIdWithoutB,
             first_name: "KU",
             last_name: "Student",
             email: tempEmail,
@@ -138,7 +139,7 @@ exports.loginStudent = async (req, res) => {
           if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
             try {
               for (const enrollment of enrollmentResponse.data) {
-                
+
                 if (enrollment.enroll_status !== 'A') {
                   console.log(`Skipping ${enrollment.subject_code} - ${enrollment.subject_name} due to status: ${enrollment.enroll_status}`);
                   continue;
