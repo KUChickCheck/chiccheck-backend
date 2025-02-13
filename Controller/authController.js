@@ -75,7 +75,10 @@ exports.loginStudent = async (req, res) => {
       // Normal login process remains the same
       const isPasswordValid = await bcrypt.compare(password, student.password);
 
-      console.log(isPasswordValid)
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      console.log(hashedPassword)
+      console.log(student.password)
 
       console.log(student)
 
