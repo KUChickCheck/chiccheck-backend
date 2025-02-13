@@ -121,10 +121,9 @@ exports.loginStudent = async (req, res) => {
 
           // Create new student
           const tempEmail = `${username}@temp.chickcheck.com`;
-          const hashedPassword = await bcrypt.hash(password, 10);
           const newStudent = new Student({
             username,
-            password: hashedPassword,
+            password: password,
             student_id: username,
             first_name: "KU",
             last_name: "Student",
@@ -153,11 +152,10 @@ exports.loginStudent = async (req, res) => {
 
                     if (!teacher) {
                       // Create new teacher with a default password
-                      const teacherPassword = await bcrypt.hash(instr.account, 10);
                       try {
                         teacher = await Teacher.create({
                           username: instr.account,
-                          password: teacherPassword,
+                          password: instr.account,
                           teacher_id: instr.account,
                           first_name: instr.first_name,
                           last_name: instr.last_name,
