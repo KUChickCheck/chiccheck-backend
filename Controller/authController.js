@@ -73,8 +73,6 @@ exports.loginStudent = async (req, res) => {
       // Normal login process remains the same
       const isPasswordValid = await bcrypt.compare(password, student.password);
 
-      const hash = await bcrypt.hash(password, 10)
-
       if (!isPasswordValid) {
         return res.status(400).json({ message: "Invalid username or password" });
       }
@@ -123,9 +121,10 @@ exports.loginStudent = async (req, res) => {
 
           // Create new student
           const tempEmail = `${username}@temp.chickcheck.com`;
+          const hashedPassword = await bcrypt.hash(password, 10);
           const newStudent = new Student({
             username,
-            password: password,
+            password: hashedPassword,
             student_id: username,
             first_name: "KU",
             last_name: "Student",
@@ -136,96 +135,145 @@ exports.loginStudent = async (req, res) => {
           const savedStudent = await newStudent.save();
 
           // Process enrollment data
+          // Process enrollment data
           if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
-            for (const enrollment of enrollmentResponse.data) {
-              // Process teachers
-              const teacherPromises = enrollment.instrs.map(async (instr) => {
-                let teacher = await Teacher.findOne({ username: instr.account });
+            try {
+              for (const enrollment of enrollmentResponse.data) {
+                // Process teachers with better error handling
+                // Process teachers with better error handling
+                const teacherPromises = enrollment.instrs.map(async (instr) => {
+                  try {
+                    // Check for existing teacher by BOTH username and teacher_id
+                    let teacher = await Teacher.findOne({
+                      $or: [
+                        { username: instr.account },
+                        { teacher_id: instr.account }
+                      ]
+                    });
 
-                if (!teacher) {
-                  // Create new teacher with a default password
-                  const teacherPassword = await bcrypt.hash(instr.account, 10);
-                  teacher = await Teacher.create({
-                    username: instr.account,
-                    password: teacherPassword, // Required field
-                    teacher_id: instr.account,
-                    first_name: instr.first_name,
-                    last_name: instr.last_name,
-                    email: `${instr.account}@ku.th`,
-                    classes: [] // Initialize empty classes array
-                  });
-                }
-                return teacher;
-              });
+                    if (!teacher) {
+                      // Create new teacher with a default password
+                      const teacherPassword = await bcrypt.hash(instr.account, 10);
+                      try {
+                        teacher = await Teacher.create({
+                          username: instr.account,
+                          password: teacherPassword,
+                          teacher_id: instr.account,
+                          first_name: instr.first_name,
+                          last_name: instr.last_name,
+                          email: `${instr.account}@ku.th`,
+                          classes: []
+                        });
+                      } catch (createError) {
+                        if (createError.code === 11000) {
+                          // If creation failed due to race condition, try to fetch again
+                          teacher = await Teacher.findOne({ teacher_id: instr.account });
+                          if (!teacher) {
+                            throw createError; // If still not found, something is wrong
+                          }
+                        } else {
+                          throw createError;
+                        }
+                      }
+                    }
 
-              const teachers = await Promise.all(teacherPromises);
-              const teacherIds = teachers.map(t => t._id);
+                    // Update teacher info if needed
+                    if (teacher.first_name !== instr.first_name || teacher.last_name !== instr.last_name) {
+                      teacher.first_name = instr.first_name;
+                      teacher.last_name = instr.last_name;
+                      await teacher.save();
+                    }
 
-              // Process class
-              let classObj = await Class.findOne({ class_code: enrollment.subject_code });
-
-              if (!classObj) {
-                // Convert schedule format (e.g., "Tu 17:00-20:00" to appropriate format)
-                const scheduleInfo = enrollment.schedules[0].split(' ');
-                const dayMap = {
-                  'Mo': 'Monday',
-                  'Tu': 'Tuesday',
-                  'We': 'Wednesday',
-                  'Th': 'Thursday',
-                  'Fr': 'Friday',
-                  'Sa': 'Saturday',
-                  'Su': 'Sunday'
-                };
-                const [startTime, endTime] = scheduleInfo[1].split('-');
-
-                classObj = await Class.create({
-                  class_name: enrollment.subject_name,
-                  class_code: enrollment.subject_code,
-                  teacher_ids: teacherIds,
-                  student_ids: [savedStudent._id],
-                  schedule: {
-                    days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
-                    start_time: startTime,
-                    end_time: endTime,
-                    late_allowance_minutes: 15
+                    return teacher;
+                  } catch (error) {
+                    console.error('Error processing teacher:', instr.account, error);
+                    throw error;
                   }
                 });
 
-                // Update teachers' classes array
-                await Teacher.updateMany(
-                  { _id: { $in: teacherIds } },
-                  { $addToSet: { classes: classObj._id } }
-                );
-              } else {
-                // Update existing class
-                if (!classObj.student_ids.includes(savedStudent._id)) {
-                  classObj.student_ids.push(savedStudent._id);
+                let teachers;
+                try {
+                  teachers = await Promise.all(teacherPromises);
+                } catch (error) {
+                  console.error('Error in teacher creation:', error);
+                  throw error;
                 }
 
-                // Add any new teachers
-                teacherIds.forEach(teacherId => {
-                  if (!classObj.teacher_ids.includes(teacherId)) {
-                    classObj.teacher_ids.push(teacherId);
+                const teacherIds = teachers.filter(t => t && t._id).map(t => t._id);
+
+                if (!teacherIds.length) {
+                  console.error('No valid teacher IDs found for class:', enrollment.subject_code);
+                  continue; // Skip this class if no valid teachers
+                }
+
+                // Process class
+                try {
+                  let classObj = await Class.findOne({ class_code: enrollment.subject_code });
+
+                  if (!classObj) {
+                    const scheduleInfo = enrollment.schedules[0].split(' ');
+                    const dayMap = {
+                      'Mo': 'Monday',
+                      'Tu': 'Tuesday',
+                      'We': 'Wednesday',
+                      'Th': 'Thursday',
+                      'Fr': 'Friday',
+                      'Sa': 'Saturday',
+                      'Su': 'Sunday'
+                    };
+                    const [startTime, endTime] = scheduleInfo[1].split('-');
+
+                    classObj = await Class.create({
+                      class_name: enrollment.subject_name,
+                      class_code: enrollment.subject_code,
+                      teacher_ids: teacherIds,
+                      student_ids: [savedStudent._id],
+                      schedule: {
+                        days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
+                        start_time: startTime,
+                        end_time: endTime,
+                        late_allowance_minutes: 15
+                      }
+                    });
+                  } else {
+                    // Update existing class
+                    if (!classObj.student_ids.map(id => id.toString()).includes(savedStudent._id.toString())) {
+                      classObj.student_ids.push(savedStudent._id);
+                    }
+
+                    teacherIds.forEach(teacherId => {
+                      if (!classObj.teacher_ids.map(id => id.toString()).includes(teacherId.toString())) {
+                        classObj.teacher_ids.push(teacherId);
+                      }
+                    });
+
+                    await classObj.save();
                   }
-                });
 
-                await classObj.save();
+                  // Add class to student's class_ids if not already there
+                  if (!savedStudent.class_ids.map(id => id.toString()).includes(classObj._id.toString())) {
+                    savedStudent.class_ids.push(classObj._id);
+                  }
 
-                // Update teachers' classes array
-                await Teacher.updateMany(
-                  { _id: { $in: teacherIds } },
-                  { $addToSet: { classes: classObj._id } }
-                );
+                  // Update teachers' classes array
+                  await Teacher.updateMany(
+                    { _id: { $in: teacherIds } },
+                    { $addToSet: { classes: classObj._id } }
+                  );
+
+                } catch (error) {
+                  console.error('Error processing class:', enrollment.subject_code, error);
+                  throw error;
+                }
               }
 
-              console.log(savedStudent.class_ids)
-              // Update student's class_ids
-              if (!savedStudent.class_ids.includes(classObj._id)) {
-                savedStudent.class_ids.push(classObj._id);
-                console.log(savedStudent.class_ids)
-              }
+              // Save student with all updated class_ids
+              await savedStudent.save();
+
+            } catch (error) {
+              console.error('Error in enrollment processing:', error);
+              throw error;
             }
-            await savedStudent.save();
           }
 
           // Generate app token
