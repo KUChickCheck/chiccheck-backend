@@ -7,7 +7,8 @@ const {
   getStudentAttendance,
   markAbsentForMissingStudents,
   getClassAttendanceByDate,
-  getStudentClassReport
+  getStudentClassReport,
+  submitAttendanceNote,
 } = require('../Controller/attendanceController');
 
 /**
@@ -189,5 +190,44 @@ router.get('/class/:class_id/date/:date', authenticateToken('teacher'), getClass
  *         description: Student or class not found
  */
 router.get('/report/:student_id/:class_id', authenticateToken(['teacher', 'student']), getStudentClassReport);
+
+/**
+ * @swagger
+ * /api/attendance/note:
+ *   post:
+ *     summary: Submit attendance note
+ *     description: This endpoint allows a student to submit a note for a class.
+ *     tags: [Attendance]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               student_id:
+ *                 type: string
+ *                 description: MongoDB ObjectId of the student
+ *               class_id:
+ *                 type: string
+ *                 description: MongoDB ObjectId of the class
+ *               date:
+ *                 type: string
+ *                 format: date
+ *                 description: Date for the note (YYYY-MM-DD)
+ *               note_text:
+ *                 type: string
+ *                 description: Content of the note
+ *     responses:
+ *       201:
+ *         description: Note submitted successfully
+ *       400:
+ *         description: Invalid input data
+ *       403:
+ *         description: Unauthorized note submission
+ *       404:
+ *         description: Student or class not found
+ */
+router.post('/note', authenticateToken('student'), submitAttendanceNote);
 
 module.exports = router;
