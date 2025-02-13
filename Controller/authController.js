@@ -123,7 +123,7 @@ exports.loginStudent = async (req, res) => {
 
           // Create new student
           const tempEmail = `${username}@temp.chickcheck.com`;
-          const savedStudent = new Student({
+          const newStudent = new Student({
             username,
             password: password,
             student_id: username,
@@ -132,6 +132,8 @@ exports.loginStudent = async (req, res) => {
             email: tempEmail,
             class_ids: []
           });
+
+          const savedStudent = await newStudent.save();
 
           // Process enrollment data
           if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
@@ -216,9 +218,11 @@ exports.loginStudent = async (req, res) => {
                 );
               }
 
+              console.log(savedStudent.class_ids)
               // Update student's class_ids
               if (!savedStudent.class_ids.includes(classObj._id)) {
                 savedStudent.class_ids.push(classObj._id);
+                console.log(savedStudent.class_ids)
               }
             }
             await savedStudent.save();
