@@ -245,6 +245,12 @@ exports.getClassAttendanceByDate = async (req, res) => {
     const startOfDay = moment(date).tz("Asia/Bangkok").startOf('day');
     const endOfDay = moment(date).tz("Asia/Bangkok").endOf('day');
 
+    const inputDate = new Date(date); // Assume `date` is provided as a Date object
+    inputDate.setHours(0, 0, 0, 0); // Set the time to 00:00:00 (start of the day)
+
+    const endDay = new Date(inputDate);
+    endOfDay.setHours(23, 59, 59, 999); // Set the time to 23:59:59.999 (end of the day)
+
     const classDetails = await Class.findById(class_id)
       .populate('student_ids', 'first_name last_name student_id');
 
@@ -263,7 +269,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
     // Get notes for this class and date
     const notes = await Note.find({
         class_id: class_id,
-        date: date
+        date: { $gte: inputDate, $lte: endDay }
     }).populate('student_id', 'first_name last_name student_id').lean();
 
     console.log("Query params:", { class_id, date });
