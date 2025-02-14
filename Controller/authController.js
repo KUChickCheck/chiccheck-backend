@@ -134,16 +134,21 @@ exports.loginStudent = async (req, res) => {
 
           const savedStudent = await newStudent.save();
 
-          // Process enrollment data
+          // Time formatting helper function
+          const formatTime = (time) => {
+            const [hours, minutes] = time.split(':');
+            return `${hours.padStart(2, '0')}:${minutes || '00'}`;
+          };
+
           // Process enrollment data
           if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
             try {
               for (const enrollment of enrollmentResponse.data) {
-
                 if (enrollment.enroll_status !== 'A') {
                   console.log(`Skipping ${enrollment.subject_code} - ${enrollment.subject_name} due to status: ${enrollment.enroll_status}`);
                   continue;
                 }
+
                 // Process teachers with better error handling
                 const teacherPromises = enrollment.instrs.map(async (instr) => {
                   try {
@@ -216,11 +221,11 @@ exports.loginStudent = async (req, res) => {
                   if (!classObj) {
                     const scheduleInfo = enrollment.schedules[0].split(' ');
                     const dayMap = {
-                      'Mo': 'Monday',
+                      'M': 'Monday',
                       'Tu': 'Tuesday',
-                      'We': 'Wednesday',
+                      'W': 'Wednesday',
                       'Th': 'Thursday',
-                      'Fr': 'Friday',
+                      'F': 'Friday',
                       'Sa': 'Saturday',
                       'Su': 'Sunday'
                     };
@@ -229,24 +234,30 @@ exports.loginStudent = async (req, res) => {
                     classObj = await Class.create({
                       class_name: enrollment.subject_name,
                       class_code: enrollment.subject_code,
-                      teacher_ids: teacherIds,
+                      teacher_ids: teacherIds,  // teacherIds is already unique from previous processing
                       student_ids: [savedStudent._id],
                       schedule: {
                         days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
-                        start_time: startTime,
-                        end_time: endTime,
+                        start_time: formatTime(startTime),
+                        end_time: formatTime(endTime),
                         late_allowance_minutes: 15
                       }
                     });
                   } else {
-                    // Update existing class
+                    // Update existing class with unique teacher IDs
                     if (!classObj.student_ids.map(id => id.toString()).includes(savedStudent._id.toString())) {
                       classObj.student_ids.push(savedStudent._id);
                     }
 
+                    // Create a Set of existing teacher IDs as strings for comparison
+                    const existingTeacherIds = new Set(classObj.teacher_ids.map(id => id.toString()));
+
+                    // Only add new unique teachers
                     teacherIds.forEach(teacherId => {
-                      if (!classObj.teacher_ids.map(id => id.toString()).includes(teacherId.toString())) {
+                      const teacherIdStr = teacherId.toString();
+                      if (!existingTeacherIds.has(teacherIdStr)) {
                         classObj.teacher_ids.push(teacherId);
+                        existingTeacherIds.add(teacherIdStr);
                       }
                     });
 
@@ -258,11 +269,13 @@ exports.loginStudent = async (req, res) => {
                     savedStudent.class_ids.push(classObj._id);
                   }
 
-                  // Update teachers' classes array
-                  await Teacher.updateMany(
-                    { _id: { $in: teacherIds } },
-                    { $addToSet: { classes: classObj._id } }
-                  );
+                  // Update teachers' classes array - ensure no duplicates
+                  for (const teacherId of teacherIds) {
+                    await Teacher.updateOne(
+                      { _id: teacherId },
+                      { $addToSet: { classes: classObj._id } }  // $addToSet ensures no duplicates
+                    );
+                  }
 
                 } catch (error) {
                   console.error('Error processing class:', enrollment.subject_code, error);
