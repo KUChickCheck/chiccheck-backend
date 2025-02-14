@@ -239,88 +239,83 @@ exports.markAbsentForMissingStudents = async (req, res) => {
 };
 
 exports.getClassAttendanceByDate = async (req, res) => {
-  try {
-    const { class_id, date } = req.params;
+    try {
+        const { class_id, date } = req.params;
 
-    const startOfDay = moment(date).tz("Asia/Bangkok").startOf('day');
-    const endOfDay = moment(date).tz("Asia/Bangkok").endOf('day');
+        const startOfDay = moment(date).tz("Asia/Bangkok").startOf('day');
+        const endOfDay = moment(date).tz("Asia/Bangkok").endOf('day');
 
-    const classDetails = await Class.findById(class_id)
-      .populate('student_ids', 'first_name last_name student_id');
+        const classDetails = await Class.findById(class_id)
+            .populate('student_ids', 'first_name last_name student_id');
 
-    if (!classDetails) {
-      return res.status(404).json({ message: "Class not found" });
+        if (!classDetails) {
+            return res.status(404).json({ message: "Class not found" });
+        }
+
+        const attendanceRecords = await Attendance.find({
+            class_id,
+            timestamp: {
+                $gte: startOfDay.toDate(),
+                $lte: endOfDay.toDate()
+            }
+        }).populate('student_id', 'first_name last_name student_id');
+
+        const notes = await Note.find({
+            class_id: class_id,
+            date: date
+        }).populate('student_id', 'first_name last_name student_id').lean();
+
+        const formattedNotes = notes.map(note => ({
+            student_id: note.student_id.student_id,
+            first_name: note.student_id.first_name,
+            last_name: note.student_id.last_name,
+            note_text: note.note_text,
+            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+        }));
+
+        const attendanceMap = {};
+        attendanceRecords.forEach(record => {
+            attendanceMap[record.student_id._id.toString()] = {
+                status: record.status,
+                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+            };
+        });
+
+        const attendanceList = classDetails.student_ids.map(student => {
+            const attendanceInfo = attendanceMap[student._id.toString()] || {
+                status: 'Absent',
+                timestamp: null
+            };
+
+            return {
+                student_id: student.student_id,
+                first_name: student.first_name,
+                last_name: student.last_name,
+                status: attendanceInfo.status,
+                timestamp: attendanceInfo.timestamp
+            };
+        });
+
+        const stats = {
+            total_students: classDetails.student_ids.length,
+            ontime: attendanceList.filter(a => a.status === 'Present').length,
+            late: attendanceList.filter(a => a.status === 'Late').length,
+            absent: attendanceList.filter(a => a.status === 'Absent').length
+        };
+
+        res.status(200).json({
+            class_name: classDetails.class_name,
+            class_code: classDetails.class_code,
+            date: moment(date).tz("Asia/Bangkok").format('YYYY-MM-DD'),
+            statistics: stats,
+            attendance: attendanceList,
+            notes: formattedNotes
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error" });
     }
-
-    const attendanceRecords = await Attendance.find({
-      class_id,
-      timestamp: {
-        $gte: startOfDay.toDate(),
-        $lte: endOfDay.toDate()
-      }
-    }).populate('student_id', 'first_name last_name student_id');
-
-    // Get notes for this class and date
-    const notes = await Note.find({
-        class_id: class_id,
-        date: date
-    }).populate('student_id', 'first_name last_name student_id').lean();
-
-    console.log("Query params:", { class_id, date });
-    console.log("Found notes:", notes);
-
-    // Format notes with student details
-    const formattedNotes = notes.map(note => ({
-        student_id: note.student_id.student_id,
-        first_name: note.student_id.first_name,
-        last_name: note.student_id.last_name,
-        note_text: note.note_text,
-        timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
-    }));
-
-    const attendanceMap = {};
-    attendanceRecords.forEach(record => {
-      attendanceMap[record.student_id._id.toString()] = {
-        status: record.status,
-        timestamp: moment(record.timestamp).tz("Asia/Bangkok").format()
-      };
-    });
-
-    const attendanceList = classDetails.student_ids.map(student => {
-      const attendanceInfo = attendanceMap[student._id.toString()] || {
-        status: 'Absent',
-        timestamp: null
-      };
-
-      return {
-        student_id: student.student_id,
-        first_name: student.first_name,
-        last_name: student.last_name,
-        status: attendanceInfo.status,
-        timestamp: attendanceInfo.timestamp
-      };
-    });
-
-    const stats = {
-      total_students: classDetails.student_ids.length,
-      ontime: attendanceList.filter(a => a.status === 'Present').length,
-      late: attendanceList.filter(a => a.status === 'Late').length,
-      absent: attendanceList.filter(a => a.status === 'Absent').length
-    };
-
-    res.status(200).json({
-      class_name: classDetails.class_name,
-      class_code: classDetails.class_code,
-      date: moment(date).tz("Asia/Bangkok").format('YYYY-MM-DD'),
-      statistics: stats,
-      attendance: attendanceList,
-      notes: formattedNotes
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
 };
 
 exports.getStudentClassReport = async (req, res) => {
@@ -439,22 +434,23 @@ exports.submitAttendanceNote = async (req, res) => {
             return res.status(404).json({ message: "Class not found" });
         }
 
-        // Create and SAVE the note
+        // Create note with Bangkok timezone
         const newNote = new Note({
             student_id,
             class_id,
-            date: date,  // Keep original date format for querying
+            date: date,
             note_text,
             timestamp: moment().tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
         });
 
-        await newNote.save();  // This line actually saves to database
+        await newNote.save();
 
         res.status(201).json({
             message: "Note submitted successfully",
             note: {
                 ...newNote.toObject(),
-                class_name: classDetails.class_name
+                class_name: classDetails.class_name,
+                timestamp: moment(newNote.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
             }
         });
 

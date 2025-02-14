@@ -1,5 +1,7 @@
+const axios = require('axios');
 const Student = require("../Schema/studentSchema");
 const Teacher = require("../Schema/teacherSchema");
+const Class = require("../Schema/classSchema");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
@@ -60,46 +62,271 @@ exports.registerStudent = async (req, res) => {
   }
 };
 
-// Student Login
 exports.loginStudent = async (req, res) => {
   try {
-    const { username, password: inputPassword } = req.body;
+    const { username, password } = req.body;
 
+    // First check if student exists in our database
     const student = await Student.findOne({ username });
 
-    if (!student) {
-      return res.status(400).json({ message: "Invalid username or password" });
+    if (student) {
+      // Normal login process remains the same
+      const isPasswordValid = await bcrypt.compare(password, student.password);
+
+      if (!isPasswordValid) {
+        return res.status(400).json({ message: "Invalid username or password" });
+      }
+
+      const token = jwt.sign(
+        { studentId: student._id },
+        process.env.JWT_SECRET || "chickcheck",
+        { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      );
+
+      const { password: pwd, class_ids, created_at, __v, ...studentInfo } = student.toObject();
+
+      return res.status(200).json({
+        token,
+        user: studentInfo,
+        message: "Student login successful"
+      });
+    } else {
+      // KU API authentication
+      try {
+        const kuApiUrl = process.env.KU_API || 'https://api-example.ku.th';
+        const kuResponse = await axios.post(
+          `${kuApiUrl}/kuedu/api/token/pair`,
+          { username, password },
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+
+        if (kuResponse.data && kuResponse.data.access) {
+          const studentCode = username.startsWith('b') ? username.substring(1) : username;
+
+          // Get enrollment data
+          const enrollmentResponse = await axios.post(
+            `${kuApiUrl}/kuedu/api/std/enrollment/semester`,
+            {
+              student_code: studentCode,
+              academic_year: 2567,
+              semester: 2
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${kuResponse.data.access}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          // Create new student
+          const studentIdWithoutB = username.startsWith('b') ? username.substring(1) : username;
+          const tempEmail = `${username}@temp.chickcheck.com`;
+          const newStudent = new Student({
+            username,
+            password: password,
+            student_id: studentIdWithoutB,
+            first_name: "KU",
+            last_name: "Student",
+            email: tempEmail,
+            class_ids: []
+          });
+
+          const savedStudent = await newStudent.save();
+
+          // Time formatting helper function
+          const formatTime = (time) => {
+            const [hours, minutes] = time.split(':');
+            return `${hours.padStart(2, '0')}:${minutes || '00'}`;
+          };
+
+          // Process enrollment data
+          if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
+            try {
+              for (const enrollment of enrollmentResponse.data) {
+                if (enrollment.enroll_status !== 'A') {
+                  console.log(`Skipping ${enrollment.subject_code} - ${enrollment.subject_name} due to status: ${enrollment.enroll_status}`);
+                  continue;
+                }
+
+                // Process teachers with better error handling
+                const processedTeachers = [];
+                for (const instr of enrollment.instrs) {
+                  try {
+                    // Check for existing teacher by BOTH username and teacher_id
+                    let teacher = await Teacher.findOne({
+                      $or: [
+                        { username: instr.account },
+                        { teacher_id: instr.account }
+                      ]
+                    });
+
+                    if (!teacher) {
+                      try {
+                        teacher = await Teacher.create({
+                          username: instr.account,
+                          password: instr.account,
+                          teacher_id: instr.account,
+                          first_name: instr.first_name,
+                          last_name: instr.last_name,
+                          email: `${instr.account}@ku.th`,
+                          classes: []
+                        });
+                      } catch (createError) {
+                        if (createError.code === 11000) {
+                          teacher = await Teacher.findOne({ teacher_id: instr.account });
+                          if (!teacher) {
+                            throw createError;
+                          }
+                        } else {
+                          throw createError;
+                        }
+                      }
+                    }
+
+                    if (teacher.first_name !== instr.first_name || teacher.last_name !== instr.last_name) {
+                      teacher.first_name = instr.first_name;
+                      teacher.last_name = instr.last_name;
+                      await teacher.save();
+                    }
+
+                    processedTeachers.push(teacher);
+                  } catch (error) {
+                    console.error('Error processing teacher:', instr.account, error);
+                    throw error;
+                  }
+                }
+
+                // Get unique teacher IDs while preserving order
+                const teacherIds = processedTeachers
+                  .filter((t, index, self) =>
+                    index === self.findIndex((s) => s._id.toString() === t._id.toString())
+                  )
+                  .map(t => t._id);
+
+                if (!teacherIds.length) {
+                  console.error('No valid teacher IDs found for class:', enrollment.subject_code);
+                  continue;
+                }
+
+                // Process class
+                try {
+                  let classObj = await Class.findOne({ class_code: enrollment.subject_code });
+
+                  if (!classObj) {
+                    const scheduleInfo = enrollment.schedules[0].split(' ');
+                    const dayMap = {
+                      'M': 'Monday',
+                      'Tu': 'Tuesday',
+                      'W': 'Wednesday',
+                      'Th': 'Thursday',
+                      'F': 'Friday',
+                      'Sa': 'Saturday',
+                      'Su': 'Sunday'
+                    };
+                    const [startTime, endTime] = scheduleInfo[1].split('-');
+
+                    classObj = await Class.create({
+                      class_name: enrollment.subject_name,
+                      class_code: enrollment.subject_code,
+                      teacher_ids: teacherIds,
+                      student_ids: [savedStudent._id],
+                      schedule: {
+                        days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
+                        start_time: formatTime(startTime),
+                        end_time: formatTime(endTime),
+                        late_allowance_minutes: 15
+                      }
+                    });
+                  } else {
+                    if (!classObj.student_ids.map(id => id.toString()).includes(savedStudent._id.toString())) {
+                      classObj.student_ids.push(savedStudent._id);
+                    }
+
+                    // Update teacher_ids while preserving order and removing duplicates
+                    const existingTeacherSet = new Set(classObj.teacher_ids.map(id => id.toString()));
+                    teacherIds.forEach(teacherId => {
+                      const teacherIdStr = teacherId.toString();
+                      if (!existingTeacherSet.has(teacherIdStr)) {
+                        classObj.teacher_ids.push(teacherId);
+                        existingTeacherSet.add(teacherIdStr);
+                      }
+                    });
+
+                    await classObj.save();
+                  }
+
+                  // Add class to student's class_ids if not already there
+                  if (!savedStudent.class_ids.map(id => id.toString()).includes(classObj._id.toString())) {
+                    savedStudent.class_ids.push(classObj._id);
+                  }
+
+                  // Update teachers' classes array
+                  for (const teacherId of teacherIds) {
+                    await Teacher.updateOne(
+                      { _id: teacherId },
+                      { $addToSet: { classes: classObj._id } }
+                    );
+                  }
+
+                } catch (error) {
+                  console.error('Error processing class:', enrollment.subject_code, error);
+                  throw error;
+                }
+              }
+
+              await savedStudent.save();
+
+            } catch (error) {
+              console.error('Error in enrollment processing:', error);
+              throw error;
+            }
+          }
+
+          // Generate app token
+          const appToken = jwt.sign(
+            { studentId: savedStudent._id },
+            process.env.JWT_SECRET || "chickcheck",
+            { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+          );
+
+          return res.status(200).json({
+            token: appToken,
+            user: {
+              _id: savedStudent._id,
+              username: savedStudent.username,
+              student_id: savedStudent.student_id,
+              first_name: savedStudent.first_name,
+              last_name: savedStudent.last_name,
+              email: savedStudent.email,
+              class_ids: savedStudent.class_ids
+            },
+            message: "Student login successful via KU API"
+          });
+        } else {
+          return res.status(400).json({ message: "Invalid credentials from KU API" });
+        }
+      } catch (kuError) {
+        if (kuError.code === 11000) {
+          const existingStudent = await Student.findOne({ username });
+          if (existingStudent) {
+            return exports.loginStudent(req, res);
+          }
+        }
+
+        console.error("KU API Error:", kuError.response?.data || kuError.message);
+        return res.status(400).json({
+          message: "Invalid username or password",
+          details: "Failed to authenticate with KU API"
+        });
+      }
     }
-
-    const isPasswordValid = await bcrypt.compare(
-      inputPassword,
-      student.password
-    );
-
-    if (!isPasswordValid) {
-      return res.status(400).json({ message: "Invalid username or password" });
-    }
-
-    const token = jwt.sign(
-      { studentId: student._id },
-      process.env.JWT_SECRET || "chickcheck",
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
-    );
-
-    const { password, class_ids, created_at, __v, ...studentInfo } =
-      student.toObject();
-
-    // Send token and user info in response
-    res.status(200).json({
-      token,
-      user: studentInfo,
-      message: "Student login successful",
-    });
   } catch (err) {
-    console.error(err);
+    console.error("Login Error:", err);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 
 // Teacher Registration
 exports.registerTeacher = async (req, res) => {

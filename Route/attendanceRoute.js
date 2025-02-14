@@ -125,23 +125,18 @@ router.post('/mark-absent', authenticateToken('teacher'), markAbsentForMissingSt
  *     description: This endpoint retrieves the attendance for a specific class on a specific date.
  *     tags: [Attendance]
  *     parameters:
- *       - name: class_id
- *         in: path
+ *       - in: path
+ *         name: class_id
+ *         required: true
+ *         schema:
+ *           type: string
  *         description: The class ID to retrieve attendance for
+ *       - in: path
+ *         name: date
  *         required: true
  *         schema:
  *           type: string
- *       - name: date
- *         in: path
- *         description: The date to retrieve attendance for (format: YYYY-MM-DD)
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Attendance records for the class on the specified date
- *       404:
- *         description: Class or attendance records not found
+ *         description: Date in YYYY-MM-DD format
  */
 router.get('/class/:class_id/date/:date', authenticateToken('teacher'), getClassAttendanceByDate);
 
