@@ -230,7 +230,12 @@ exports.getStudentClassesByDay = async (req, res) => {
                         id: teacher._id,
                         name: `${teacher.first_name} ${teacher.last_name}`
                     })),
-                    schedule: daySchedule, // Only return the specific day's schedule
+                    schedule: {
+                        days: daySchedule.days,
+                        start_time: daySchedule.start_time,
+                        end_time: daySchedule.end_time,
+                        late_allowance_minutes: daySchedule.late_allowance_minutes
+                    },
                     status: attendanceMap[classItem._id.toString()] || 'Not checked'
                 };
             });
