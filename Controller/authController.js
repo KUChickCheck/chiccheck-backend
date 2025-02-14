@@ -218,6 +218,9 @@ exports.loginStudent = async (req, res) => {
                 try {
                   let classObj = await Class.findOne({ class_code: enrollment.subject_code });
 
+                  // Remove any duplicates from teacherIds array first
+                  const uniqueTeacherIds = [...new Set(teacherIds.map(id => id.toString()))].map(id => mongoose.Types.ObjectId(id));
+
                   if (!classObj) {
                     const scheduleInfo = enrollment.schedules[0].split(' ');
                     const dayMap = {
@@ -234,7 +237,7 @@ exports.loginStudent = async (req, res) => {
                     classObj = await Class.create({
                       class_name: enrollment.subject_name,
                       class_code: enrollment.subject_code,
-                      teacher_ids: teacherIds,  // teacherIds is already unique from previous processing
+                      teacher_ids: uniqueTeacherIds,  // Use the deduplicated array
                       student_ids: [savedStudent._id],
                       schedule: {
                         days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
@@ -244,22 +247,24 @@ exports.loginStudent = async (req, res) => {
                       }
                     });
                   } else {
-                    // Update existing class with unique teacher IDs
+                    // Update existing class
                     if (!classObj.student_ids.map(id => id.toString()).includes(savedStudent._id.toString())) {
                       classObj.student_ids.push(savedStudent._id);
                     }
 
-                    // Create a Set of existing teacher IDs as strings for comparison
+                    // Get existing teacher IDs as a Set for easy lookup
                     const existingTeacherIds = new Set(classObj.teacher_ids.map(id => id.toString()));
 
-                    // Only add new unique teachers
-                    teacherIds.forEach(teacherId => {
+                    // Add only unique new teachers
+                    uniqueTeacherIds.forEach(teacherId => {
                       const teacherIdStr = teacherId.toString();
                       if (!existingTeacherIds.has(teacherIdStr)) {
                         classObj.teacher_ids.push(teacherId);
-                        existingTeacherIds.add(teacherIdStr);
                       }
                     });
+
+                    // Deduplicate entire teacher_ids array again just to be safe
+                    classObj.teacher_ids = [...new Set(classObj.teacher_ids.map(id => id.toString()))].map(id => mongoose.Types.ObjectId(id));
 
                     await classObj.save();
                   }
@@ -270,13 +275,12 @@ exports.loginStudent = async (req, res) => {
                   }
 
                   // Update teachers' classes array - ensure no duplicates
-                  for (const teacherId of teacherIds) {
+                  for (const teacherId of uniqueTeacherIds) {
                     await Teacher.updateOne(
                       { _id: teacherId },
-                      { $addToSet: { classes: classObj._id } }  // $addToSet ensures no duplicates
+                      { $addToSet: { classes: classObj._id } }
                     );
                   }
-
                 } catch (error) {
                   console.error('Error processing class:', enrollment.subject_code, error);
                   throw error;
