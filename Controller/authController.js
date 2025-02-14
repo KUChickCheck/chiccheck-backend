@@ -214,29 +214,34 @@ exports.loginStudent = async (req, res) => {
                   let classObj = await Class.findOne({ class_code: enrollment.subject_code });
 
                   if (!classObj) {
-                    const scheduleInfo = enrollment.schedules[0].split(' ');
-                    const dayMap = {
-                      'M': 'Monday',
-                      'Tu': 'Tuesday',
-                      'W': 'Wednesday',
-                      'Th': 'Thursday',
-                      'F': 'Friday',
-                      'Sa': 'Saturday',
-                      'Su': 'Sunday'
-                    };
-                    const [startTime, endTime] = scheduleInfo[1].split('-');
+                    // Convert schedule format (e.g., "Tu 17:00-20:00" to appropriate format)
+                    const schedules = enrollment.schedules.map(schedule => {
+                      const scheduleInfo = schedule.split(' ');
+                      const dayMap = {
+                        'Mo': 'Monday',
+                        'Tu': 'Tuesday',
+                        'We': 'Wednesday',
+                        'Th': 'Thursday',
+                        'Fr': 'Friday',
+                        'Sa': 'Saturday',
+                        'Su': 'Sunday'
+                      };
+                      const [startTime, endTime] = scheduleInfo[1].split('-');
+
+                      return {
+                        days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
+                        start_time: startTime,
+                        end_time: endTime,
+                        late_allowance_minutes: 15
+                      };
+                    });
 
                     classObj = await Class.create({
                       class_name: enrollment.subject_name,
                       class_code: enrollment.subject_code,
                       teacher_ids: teacherIds,
                       student_ids: [savedStudent._id],
-                      schedule: {
-                        days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
-                        start_time: formatTime(startTime),
-                        end_time: formatTime(endTime),
-                        late_allowance_minutes: 15
-                      }
+                      schedule: schedules  // Now it's an array of schedules
                     });
                   } else {
                     if (!classObj.student_ids.map(id => id.toString()).includes(savedStudent._id.toString())) {
