@@ -186,8 +186,7 @@ exports.getStudentClassesByDay = async (req, res) => {
 
         // Get all classes for this student
         const classes = await Class.find({
-            _id: { $in: student.class_ids },
-            'schedule.days': { $regex: day, $options: 'i' }
+            _id: { $in: student.class_ids }
         })
         .populate('teacher_ids', 'first_name last_name')
         .lean();
@@ -209,31 +208,41 @@ exports.getStudentClassesByDay = async (req, res) => {
             attendanceMap[record.class_id.toString()] = record.status;
         });
 
-        // Format response data
-        let classesWithStatus = classes.map(classItem => ({
-            class_name: classItem.class_name,
-            class_id: classItem._id,
-            teachers: classItem.teacher_ids.map(teacher => ({
-                id: teacher._id,
-                name: `${teacher.first_name} ${teacher.last_name}`
-            })),
-            schedule: classItem.schedule,
-            status: attendanceMap[classItem._id.toString()] || 'Not checked'
-        }));
+        // Filter classes for the specific day and format response data
+        let classesWithStatus = classes
+            .filter(classItem => {
+                // Check each schedule in the array for the specific day
+                return classItem.schedule.some(schedule => {
+                    const classDays = schedule.days.toLowerCase();
+                    return classDays.includes(day.toLowerCase());
+                });
+            })
+            .map(classItem => {
+                // Find the schedule for this specific day
+                const daySchedule = classItem.schedule.find(schedule =>
+                    schedule.days.toLowerCase().includes(day.toLowerCase())
+                );
 
-        // Sort classes:
-        // 1. Unchecked classes first, sorted by start time
-        // 2. Checked classes last, sorted by start time
+                return {
+                    class_name: classItem.class_name,
+                    class_id: classItem._id,
+                    teachers: classItem.teacher_ids.map(teacher => ({
+                        id: teacher._id,
+                        name: `${teacher.first_name} ${teacher.last_name}`
+                    })),
+                    schedule: daySchedule, // Only return the specific day's schedule
+                    status: attendanceMap[classItem._id.toString()] || 'Not checked'
+                };
+            });
+
+        // Sort classes
         classesWithStatus.sort((a, b) => {
             const aChecked = a.status !== 'Not checked';
             const bChecked = b.status !== 'Not checked';
 
             if (aChecked === bChecked) {
-                // If both checked or both unchecked, sort by time
                 return a.schedule.start_time.localeCompare(b.schedule.start_time);
             }
-
-            // Put unchecked first
             return aChecked ? 1 : -1;
         });
 
