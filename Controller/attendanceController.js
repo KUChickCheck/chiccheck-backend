@@ -263,10 +263,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
     // Get notes for this class and date
     const notes = await Note.find({
         class_id: class_id,
-        timestamp: {
-          $gte: startOfDay.toDate(),
-          $lte: endOfDay.toDate()
-        }
+        date: date
     }).populate('student_id', 'first_name last_name student_id').lean();
 
     console.log("Query params:", { class_id, date });
