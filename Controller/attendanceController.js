@@ -260,13 +260,11 @@ exports.getClassAttendanceByDate = async (req, res) => {
             }
         }).populate('student_id', 'first_name last_name student_id');
 
-        // Get notes for this class and date
         const notes = await Note.find({
             class_id: class_id,
             date: date
         }).populate('student_id', 'first_name last_name student_id').lean();
 
-        // Format notes with student details and proper timezone
         const formattedNotes = notes.map(note => ({
             student_id: note.student_id.student_id,
             first_name: note.student_id.first_name,
@@ -442,7 +440,7 @@ exports.submitAttendanceNote = async (req, res) => {
             class_id,
             date: date,
             note_text,
-            timestamp: moment().tz("Asia/Bangkok").format()  // Store as ISO string with proper timezone
+            timestamp: moment().tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
         });
 
         await newNote.save();
