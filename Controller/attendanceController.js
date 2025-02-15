@@ -235,7 +235,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
     try {
         const { class_id, date } = req.params;
 
-        // Explicitly set the start and end of day in Bangkok time
+        // Convert date range to match MongoDB's ISO date format
         const startOfDay = moment.tz(date, "Asia/Bangkok").startOf('day');
         const endOfDay = moment.tz(date, "Asia/Bangkok").endOf('day');
 
@@ -254,25 +254,43 @@ exports.getClassAttendanceByDate = async (req, res) => {
             }
         }).populate('student_id', 'first_name last_name student_id');
 
+        // Modified notes query to match ISO date string pattern
         const notes = await Note.find({
             class_id: class_id,
-            date: date
+            $or: [
+                // Match the date part of the ISO string
+                { date: { $regex: `^${date}` } },
+                // Also try with timestamp field
+                { timestamp: {
+                    $gte: startOfDay.toDate(),
+                    $lte: endOfDay.toDate()
+                }}
+            ]
         }).populate('student_id', 'first_name last_name student_id').lean();
+
+        console.log("Query parameters:", {
+            class_id,
+            date,
+            dateRegex: `^${date}`,
+            startDay: startOfDay.format(),
+            endDay: endOfDay.format()
+        });
+        console.log("Found notes raw:", await Note.find({ class_id: class_id }).lean());
+        console.log("Found notes after filter:", notes);
 
         const formattedNotes = notes.map(note => ({
             student_id: note.student_id.student_id,
             first_name: note.student_id.first_name,
             last_name: note.student_id.last_name,
             note_text: note.note_text,
-            timestamp: moment.tz(note.timestamp, "Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
         }));
 
         const attendanceMap = {};
         attendanceRecords.forEach(record => {
             attendanceMap[record.student_id._id.toString()] = {
                 status: record.status,
-                // Explicitly convert UTC to Bangkok time
-                timestamp: moment.tz(record.timestamp, "Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
             };
         });
 
@@ -298,7 +316,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
             absent: attendanceList.filter(a => a.status === 'Absent').length
         };
 
-        res.status(200).json({
+       res.status(200).json({
             class_name: classDetails.class_name,
             class_code: classDetails.class_code,
             date: moment.tz(date, "Asia/Bangkok").format('YYYY-MM-DD'),
