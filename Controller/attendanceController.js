@@ -278,21 +278,21 @@ exports.getClassAttendanceByDate = async (req, res) => {
         console.log("Found notes raw:", await Note.find({ class_id: class_id }).lean());
         console.log("Found notes after filter:", notes);
 
+        const attendanceMap = {};
+        attendanceRecords.forEach(record => {
+            attendanceMap[record.student_id._id.toString()] = {
+                status: record.status,
+                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
+            };
+        });
+
         const formattedNotes = notes.map(note => ({
             student_id: note.student_id.student_id,
             first_name: note.student_id.first_name,
             last_name: note.student_id.last_name,
             note_text: note.note_text,
-            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
         }));
-
-        const attendanceMap = {};
-        attendanceRecords.forEach(record => {
-            attendanceMap[record.student_id._id.toString()] = {
-                status: record.status,
-                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
-            };
-        });
 
         const attendanceList = classDetails.student_ids.map(student => {
             const attendanceInfo = attendanceMap[student._id.toString()] || {
@@ -447,7 +447,7 @@ exports.submitAttendanceNote = async (req, res) => {
         }
 
         // Create current time in Bangkok timezone
-        const bangkokTime = moment().tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss');
+        const bangkokTime = moment().tz("Asia/Bangkok").format(); // This will create ISO format
 
         const newNote = new Note({
             student_id,
@@ -459,12 +459,13 @@ exports.submitAttendanceNote = async (req, res) => {
 
         await newNote.save();
 
+        // Format timestamp consistently when sending response
         res.status(201).json({
             message: "Note submitted successfully",
             note: {
                 ...newNote.toObject(),
                 class_name: classDetails.class_name,
-                timestamp: moment.tz(newNote.timestamp, "Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+                timestamp: moment(newNote.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
             }
         });
 
