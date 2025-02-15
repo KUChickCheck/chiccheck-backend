@@ -21,8 +21,9 @@ const noteSchema = new mongoose.Schema({
         required: true
     },
     timestamp: {
-        type: String,
-        required: true
+        type: Date,
+        required: true,
+        default: Date.now
     }
 });
 

@@ -291,7 +291,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
             first_name: note.student_id.first_name,
             last_name: note.student_id.last_name,
             note_text: note.note_text,
-            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
+            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
         }));
 
         const attendanceList = classDetails.student_ids.map(student => {
@@ -454,18 +454,17 @@ exports.submitAttendanceNote = async (req, res) => {
             class_id,
             date: date,
             note_text,
-            timestamp: bangkokTime
+            timestamp: new Date()  // Now storing as Date object
         });
 
         await newNote.save();
 
-        // Format timestamp consistently when sending response
         res.status(201).json({
             message: "Note submitted successfully",
             note: {
                 ...newNote.toObject(),
                 class_name: classDetails.class_name,
-                timestamp: moment(newNote.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
+                timestamp: moment(newNote.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
             }
         });
 
