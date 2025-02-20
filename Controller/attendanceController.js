@@ -8,6 +8,11 @@ require('dotenv').config();
 
 async function verifyFace(student_code, photo) {
   try {
+    const student = await Student.find({student_id: student_code})
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
     // Step 1: Get the access token
     const accessTokenResponse = await axios.post(`${process.env.KU_API}/kuedu/api/token/pair`, {
       username: process.env.KU_USERNAME,
@@ -36,35 +41,29 @@ async function verifyFace(student_code, photo) {
 
 exports.markAttendance = async (req, res) => {
   try {
-    
     const { student_id, class_id, photo } = req.body;
     const currentTime = new Date();
 
     if (student_id !== req.user.studentId) {
-      return res
-        .status(403)
-        .json({
-          message: "Access forbidden: You can not mark attendance for others.",
-        });
+      return res.status(403).json({
+        message: "Access forbidden: You can not mark attendance for others.",
+      });
     }
 
     if (!photo) {
       return res.status(400).json({ message: "photo are required" });
     }
 
-    // Check if student exists
     const student = await Student.findById(student_id);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    // Check if class exists and get its schedule
     const classDetails = await Class.findById(class_id);
     if (!classDetails) {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // Check if student is enrolled in this class
     if (!student.class_ids.includes(class_id)) {
       return res.status(400).json({ message: "Student is not enrolled in this class" });
     }
@@ -74,21 +73,24 @@ exports.markAttendance = async (req, res) => {
       return res.status(400).json({ message: "Face verification failed" });
     }
 
-    // Parse class times
-    const classDate = moment(currentTime).tz("Asia/Bangkok").format('YYYY-MM-DD');
-    const classStartTime = moment.tz(`${classDate} ${classDetails.schedule.start_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok");
-    const classEndTime = moment.tz(`${classDate} ${classDetails.schedule.end_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok");
-    const lateAllowanceTime = moment(classStartTime).add(classDetails.schedule.late_allowance_minutes, 'minutes');
     const currentMoment = moment.tz(currentTime, "Asia/Bangkok");
-
-    // Check if today is a class day
-    const classDays = classDetails.schedule.days.split(',').map(day => day.trim().toLowerCase());
     const today = currentMoment.format('dddd').toLowerCase();
-    if (!classDays.includes(today)) {
+    const classDate = currentMoment.format('YYYY-MM-DD');
+
+    // Find today's schedule
+    const todaySchedule = classDetails.schedule.find(schedule => {
+      const classDays = schedule.days.toLowerCase().split(',').map(day => day.trim());
+      return classDays.includes(today);
+    });
+
+    if (!todaySchedule) {
       return res.status(400).json({ message: "No class scheduled for today" });
     }
 
-    // Determine attendance status based on time
+    const classStartTime = moment.tz(`${classDate} ${todaySchedule.start_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok");
+    const classEndTime = moment.tz(`${classDate} ${todaySchedule.end_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok");
+    const lateAllowanceTime = moment(classStartTime).add(todaySchedule.late_allowance_minutes, 'minutes');
+
     let status;
     if (currentMoment.isBefore(lateAllowanceTime)) {
       status = "Present";
@@ -98,7 +100,6 @@ exports.markAttendance = async (req, res) => {
       status = "Absent";
     }
 
-    // Check for existing attendance record
     const todayStart = moment().tz("Asia/Bangkok").startOf('day');
     const todayEnd = moment().tz("Asia/Bangkok").endOf('day');
 
@@ -118,7 +119,6 @@ exports.markAttendance = async (req, res) => {
       });
     }
 
-    // Create attendance record
     const attendance = new Attendance({
       student_id,
       class_id,
@@ -134,9 +134,9 @@ exports.markAttendance = async (req, res) => {
         ...attendance.toObject(),
         class_details: {
           name: classDetails.class_name,
-          start_time: classDetails.schedule.start_time,
-          end_time: classDetails.schedule.end_time,
-          late_allowance_minutes: classDetails.schedule.late_allowance_minutes
+          start_time: todaySchedule.start_time,
+          end_time: todaySchedule.end_time,
+          late_allowance_minutes: todaySchedule.late_allowance_minutes
         }
       }
     });
@@ -179,28 +179,28 @@ exports.markAbsentForMissingStudents = async (req, res) => {
   try {
     const { class_id, date } = req.body;
 
-    // Get class details
     const classDetails = await Class.findById(class_id);
     if (!classDetails) {
       return res.status(404).json({ message: "Class not found" });
     }
 
-    // Get the specified date or use current date
     const checkDate = date ? moment(date) : moment();
-
-    // Check if this was a class day
-    const classDays = classDetails.schedule.days.split(',').map(day => day.trim().toLowerCase());
     const checkDay = checkDate.format('dddd').toLowerCase();
-    if (!classDays.includes(checkDay)) {
+
+    // Find schedule for this day
+    const daySchedule = classDetails.schedule.find(schedule => {
+      const classDays = schedule.days.toLowerCase().split(',').map(day => day.trim());
+      return classDays.includes(checkDay);
+    });
+
+    if (!daySchedule) {
       return res.status(400).json({ message: "No class scheduled for this day" });
     }
 
-    // Get all students enrolled in this class
     const enrolledStudents = await Student.find({
       class_ids: class_id
     });
 
-    // Get all attendance records for this class on this date
     const existingAttendance = await Attendance.find({
       class_id,
       timestamp: {
@@ -209,19 +209,17 @@ exports.markAbsentForMissingStudents = async (req, res) => {
       }
     });
 
-    // Find students who haven't marked attendance
     const studentsWithAttendance = existingAttendance.map(record => record.student_id.toString());
     const absentStudents = enrolledStudents.filter(student =>
       !studentsWithAttendance.includes(student._id.toString())
     );
 
-    // Mark absent for students who haven't marked attendance
     const absentRecords = await Promise.all(absentStudents.map(student => {
       const attendance = new Attendance({
         student_id: student._id,
         class_id,
         status: 'Absent',
-        timestamp: moment(`${checkDate.format('YYYY-MM-DD')} ${classDetails.schedule.end_time}`, 'YYYY-MM-DD HH:mm').toDate()
+        timestamp: moment.tz(`${checkDate.format('YYYY-MM-DD')} ${daySchedule.end_time}`, 'YYYY-MM-DD HH:mm', "Asia/Bangkok").toDate()
       });
       return attendance.save();
     }));
@@ -242,8 +240,9 @@ exports.getClassAttendanceByDate = async (req, res) => {
     try {
         const { class_id, date } = req.params;
 
-        const startOfDay = moment(date).tz("Asia/Bangkok").startOf('day');
-        const endOfDay = moment(date).tz("Asia/Bangkok").endOf('day');
+        // Convert date range to match MongoDB's ISO date format
+        const startOfDay = moment.tz(date, "Asia/Bangkok").startOf('day');
+        const endOfDay = moment.tz(date, "Asia/Bangkok").endOf('day');
 
         const classDetails = await Class.findById(class_id)
             .populate('student_ids', 'first_name last_name student_id');
@@ -260,10 +259,37 @@ exports.getClassAttendanceByDate = async (req, res) => {
             }
         }).populate('student_id', 'first_name last_name student_id');
 
+        // Modified notes query to match ISO date string pattern
         const notes = await Note.find({
             class_id: class_id,
-            date: date
+            $or: [
+                // Match the date part of the ISO string
+                { date: { $regex: `^${date}` } },
+                // Also try with timestamp field
+                { timestamp: {
+                    $gte: startOfDay.toDate(),
+                    $lte: endOfDay.toDate()
+                }}
+            ]
         }).populate('student_id', 'first_name last_name student_id').lean();
+
+        console.log("Query parameters:", {
+            class_id,
+            date,
+            dateRegex: `^${date}`,
+            startDay: startOfDay.format(),
+            endDay: endOfDay.format()
+        });
+        console.log("Found notes raw:", await Note.find({ class_id: class_id }).lean());
+        console.log("Found notes after filter:", notes);
+
+        const attendanceMap = {};
+        attendanceRecords.forEach(record => {
+            attendanceMap[record.student_id._id.toString()] = {
+                status: record.status,
+                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
+            };
+        });
 
         const formattedNotes = notes.map(note => ({
             student_id: note.student_id.student_id,
@@ -272,14 +298,6 @@ exports.getClassAttendanceByDate = async (req, res) => {
             note_text: note.note_text,
             timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
         }));
-
-        const attendanceMap = {};
-        attendanceRecords.forEach(record => {
-            attendanceMap[record.student_id._id.toString()] = {
-                status: record.status,
-                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
-            };
-        });
 
         const attendanceList = classDetails.student_ids.map(student => {
             const attendanceInfo = attendanceMap[student._id.toString()] || {
@@ -303,10 +321,10 @@ exports.getClassAttendanceByDate = async (req, res) => {
             absent: attendanceList.filter(a => a.status === 'Absent').length
         };
 
-        res.status(200).json({
+       res.status(200).json({
             class_name: classDetails.class_name,
             class_code: classDetails.class_code,
-            date: moment(date).tz("Asia/Bangkok").format('YYYY-MM-DD'),
+            date: moment.tz(date, "Asia/Bangkok").format('YYYY-MM-DD'),
             statistics: stats,
             attendance: attendanceList,
             notes: formattedNotes
@@ -317,6 +335,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
 
 exports.getStudentClassReport = async (req, res) => {
     try {
@@ -385,28 +404,29 @@ exports.getStudentClassReport = async (req, res) => {
 
 // Helper function to calculate total classes
 const calculateTotalClasses = async (classDetails, startDate, currentDate) => {
-    const classDays = classDetails.schedule.days.toLowerCase().split(',').map(day => day.trim());
     const currentMoment = moment().tz("Asia/Bangkok");
-
     let totalClasses = 0;
     let currentDay = moment(startDate).tz("Asia/Bangkok").startOf('day');
 
     while (currentDay.isSameOrBefore(currentMoment, 'day')) {
         const dayName = currentDay.format('dddd').toLowerCase();
 
-        if (classDays.includes(dayName)) {
-            // Create class start time for this day
-            const classStartTime = moment.tz(
-                `${currentDay.format('YYYY-MM-DD')} ${classDetails.schedule.start_time}`,
-                'YYYY-MM-DD HH:mm',
-                "Asia/Bangkok"
-            );
+        // Check each schedule
+        classDetails.schedule.forEach(schedule => {
+            const classDays = schedule.days.toLowerCase().split(',').map(day => day.trim());
+            if (classDays.includes(dayName)) {
+                const classStartTime = moment.tz(
+                    `${currentDay.format('YYYY-MM-DD')} ${schedule.start_time}`,
+                    'YYYY-MM-DD HH:mm',
+                    "Asia/Bangkok"
+                );
 
-            // Only count if class start time has passed
-            if (classStartTime.isBefore(currentMoment)) {
-                totalClasses++;
+                if (classStartTime.isBefore(currentMoment)) {
+                    totalClasses++;
+                }
             }
-        }
+        });
+
         currentDay.add(1, 'day');
     }
 
@@ -417,30 +437,29 @@ exports.submitAttendanceNote = async (req, res) => {
     try {
         const { student_id, class_id, date, note_text } = req.body;
 
-        // Verify if this is the student's own note
         if (student_id !== req.user.studentId) {
             return res.status(403).json({ message: "You can only submit notes for yourself" });
         }
 
-        // Check if student exists
         const student = await Student.findById(student_id);
         if (!student) {
             return res.status(404).json({ message: "Student not found" });
         }
 
-        // Check if class exists
         const classDetails = await Class.findById(class_id);
         if (!classDetails) {
             return res.status(404).json({ message: "Class not found" });
         }
 
-        // Create note with Bangkok timezone
+        // Create current time in Bangkok timezone
+        const bangkokTime = moment().tz("Asia/Bangkok").format(); // This will create ISO format
+
         const newNote = new Note({
             student_id,
             class_id,
             date: date,
             note_text,
-            timestamp: moment().tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+            timestamp: new Date()  // Now storing as Date object
         });
 
         await newNote.save();

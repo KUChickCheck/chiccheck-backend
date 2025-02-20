@@ -214,30 +214,45 @@ exports.loginStudent = async (req, res) => {
                   let classObj = await Class.findOne({ class_code: enrollment.subject_code });
 
                   if (!classObj) {
-                    const scheduleInfo = enrollment.schedules[0].split(' ');
-                    const dayMap = {
-                      'M': 'Monday',
-                      'Tu': 'Tuesday',
-                      'W': 'Wednesday',
-                      'Th': 'Thursday',
-                      'F': 'Friday',
-                      'Sa': 'Saturday',
-                      'Su': 'Sunday'
-                    };
-                    const [startTime, endTime] = scheduleInfo[1].split('-');
+                      // Convert schedule format with proper day mapping for each schedule
+                      const schedules = enrollment.schedules.map(schedule => {
+                          const scheduleInfo = schedule.split(' ');
+                          const dayMap = {
+                              'M': 'Monday',
+                              'Mo': 'Monday',
+                              'T': 'Tuesday',
+                              'Tu': 'Tuesday',
+                              'W': 'Wednesday',
+                              'We': 'Wednesday',
+                              'Th': 'Thursday',
+                              'F': 'Friday',
+                              'Fr': 'Friday',
+                              'Sa': 'Saturday',
+                              'Su': 'Sunday'
+                          };
 
-                    classObj = await Class.create({
-                      class_name: enrollment.subject_name,
-                      class_code: enrollment.subject_code,
-                      teacher_ids: teacherIds,
-                      student_ids: [savedStudent._id],
-                      schedule: {
-                        days: dayMap[scheduleInfo[0]] || scheduleInfo[0],
-                        start_time: formatTime(startTime),
-                        end_time: formatTime(endTime),
-                        late_allowance_minutes: 15
-                      }
-                    });
+                          // Split time part and ensure proper formatting
+                          const [startTime, endTime] = scheduleInfo[1].split('-');
+
+                          // Handle the day part
+                          const rawDay = scheduleInfo[0];
+                          const mappedDay = dayMap[rawDay] || rawDay;
+
+                          return {
+                              days: mappedDay,
+                              start_time: formatTime(startTime),
+                              end_time: formatTime(endTime),
+                              late_allowance_minutes: 15
+                          };
+                      });
+
+                      classObj = await Class.create({
+                          class_name: enrollment.subject_name,
+                          class_code: enrollment.subject_code,
+                          teacher_ids: teacherIds,
+                          student_ids: [savedStudent._id],
+                          schedule: schedules
+                      });
                   } else {
                     if (!classObj.student_ids.map(id => id.toString()).includes(savedStudent._id.toString())) {
                       classObj.student_ids.push(savedStudent._id);
