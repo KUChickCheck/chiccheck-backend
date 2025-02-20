@@ -8,6 +8,11 @@ require('dotenv').config();
 
 async function verifyFace(student_code, photo) {
   try {
+    const student = await Student.find({student_id: student_code})
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
     // Step 1: Get the access token
     const accessTokenResponse = await axios.post(`${process.env.KU_API}/kuedu/api/token/pair`, {
       username: process.env.KU_USERNAME,

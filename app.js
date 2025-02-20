@@ -10,6 +10,7 @@ const teacherRoute = require("./Route/teacherRoute");
 const attendanceRoute = require("./Route/attendanceRoute");
 const faceRoute = require("./Route/faceRoute");
 const { setupCronJobs } = require("./cronJobs");
+require('dotenv').config();
 
 // Initialize Express app
 const app = express();
