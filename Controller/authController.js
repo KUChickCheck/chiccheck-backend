@@ -96,7 +96,8 @@ exports.loginStudent = async (req, res) => {
         const kuApiUrl = process.env.KU_API || 'https://api-example.ku.th';
         const kuResponse = await axios.post(
           `${kuApiUrl}/kuedu/api/token/pair`,
-          { username, password },
+          { username: process.env.KU_USERNAME,
+            password: process.env.KU_PASSWORD },
           { headers: { 'Content-Type': 'application/json' } }
         );
 
@@ -121,18 +122,8 @@ exports.loginStudent = async (req, res) => {
 
           // Create new student
           const studentIdWithoutB = username.startsWith('b') ? username.substring(1) : username;
-          const tempEmail = `${username}@temp.chickcheck.com`;
-          const newStudent = new Student({
-            username,
-            password: password,
-            student_id: studentIdWithoutB,
-            first_name: "KU",
-            last_name: "Student",
-            email: tempEmail,
-            class_ids: []
-          });
+          // const tempEmail = `${username}@temp.chickcheck.com`;
 
-          const savedStudent = await newStudent.save();
 
           // Time formatting helper function
           const formatTime = (time) => {
@@ -140,8 +131,21 @@ exports.loginStudent = async (req, res) => {
             return `${hours.padStart(2, '0')}:${minutes || '00'}`;
           };
 
+          let savedStudent;
+
           // Process enrollment data
           if (enrollmentResponse.data && enrollmentResponse.data.length > 0) {
+            const newStudent = new Student({
+              username,
+              password: password,
+              student_id: studentIdWithoutB,
+              first_name: "KU",
+              last_name: "Student",
+              email: password,
+              class_ids: []
+            });
+  
+            savedStudent = await newStudent.save();
             try {
               for (const enrollment of enrollmentResponse.data) {
                 if (enrollment.enroll_status !== 'A') {
@@ -296,6 +300,8 @@ exports.loginStudent = async (req, res) => {
               console.error('Error in enrollment processing:', error);
               throw error;
             }
+          } else {
+            return res.status(400).json({ message: "Invalid credentials from KU API" });
           }
 
           // Generate app token

@@ -15,4 +15,3 @@ const connectDB = async () => {
 };
 
 module.exports = connectDB;
-//mongodb://root:example@localhost:27017/chickcheck?authSource=admin
