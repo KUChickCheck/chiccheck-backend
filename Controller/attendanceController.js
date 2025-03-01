@@ -289,52 +289,48 @@ exports.getClassAttendanceByDate = async (req, res) => {
         // Initialize location status map
         const locationStatusMap = {};
 
-        // Only perform outlier detection if we have enough data points
-        if (recordsWithLocation.length >= 3) {
-            // Calculate the mean center of all locations
-            const locationSum = recordsWithLocation.reduce((sum, record) => {
-                return {
-                    latitude: sum.latitude + record.location.latitude,
-                    longitude: sum.longitude + record.location.longitude
-                };
-            }, { latitude: 0, longitude: 0 });
+        // Perform pairwise outlier detection if we have enough data points
+        if (recordsWithLocation.length >= 2) {
+            const threshold = 50; // 50 meters
+            const outlierThresholdPercent = 0.5; // 50% of students must be within range to be considered normal
 
-            const meanCenter = {
-                latitude: locationSum.latitude / recordsWithLocation.length,
-                longitude: locationSum.longitude / recordsWithLocation.length
-            };
+            // For each student, check distance to all other students
+            recordsWithLocation.forEach(record => {
+                const studentId = record.student_id._id.toString();
 
-            // Calculate the distance of each location from the mean center
-            const recordsWithDistance = recordsWithLocation.map(record => {
-                const distance = calculateDistance(
-                    record.location.latitude,
-                    record.location.longitude,
-                    meanCenter.latitude,
-                    meanCenter.longitude
-                );
+                // Count how many other students are within the threshold distance
+                let studentsWithinThreshold = 0;
 
-                return {
-                    student_id: record.student_id._id.toString(),
-                    distance
-                };
-            });
+                recordsWithLocation.forEach(otherRecord => {
+                    if (record.student_id._id.toString() !== otherRecord.student_id._id.toString()) {
+                        const distance = calculateDistance(
+                            record.location.latitude,
+                            record.location.longitude,
+                            otherRecord.location.latitude,
+                            otherRecord.location.longitude
+                        );
 
-            // Calculate standard deviation of distances
-            const distances = recordsWithDistance.map(r => r.distance);
-            const meanDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
-            const squaredDifferences = distances.map(d => Math.pow(d - meanDistance, 2));
-            const variance = squaredDifferences.reduce((sum, sq) => sum + sq, 0) / distances.length;
-            const stdDev = Math.sqrt(variance);
+                        if (distance <= threshold) {
+                            studentsWithinThreshold++;
+                        }
+                    }
+                });
 
-            // Mark outliers (locations more than 2 standard deviations from mean)
-            const outlierThreshold = meanDistance + (2 * stdDev);
+                // Calculate percentage of students within threshold
+                const totalOtherStudents = recordsWithLocation.length - 1;
+                const percentWithinThreshold = totalOtherStudents > 0
+                    ? studentsWithinThreshold / totalOtherStudents
+                    : 1; // If there's only one student, they're not an outlier
 
-            // Create location status map for each student
-            recordsWithDistance.forEach(record => {
-                locationStatusMap[record.student_id] = {
-                    is_outlier: record.distance > outlierThreshold,
-                    distance_from_center: record.distance,
-                    location_status: record.distance > outlierThreshold ? 'Outlier' : 'Normal'
+                // Determine if this student is an outlier
+                const isOutlier = percentWithinThreshold < outlierThresholdPercent;
+
+                locationStatusMap[studentId] = {
+                    is_outlier: isOutlier,
+                    students_within_threshold: studentsWithinThreshold,
+                    total_other_students: totalOtherStudents,
+                    percent_within_threshold: percentWithinThreshold,
+                    location_status: isOutlier ? 'Outlier' : 'Normal'
                 };
             });
         }
