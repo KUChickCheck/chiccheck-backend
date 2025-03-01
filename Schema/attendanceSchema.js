@@ -22,14 +22,19 @@ const attendanceSchema = new mongoose.Schema({
     default: Date.now
   },
   location: {
-    latitude: {
-      type: Number,
-      required: false
-    },
-    longitude: {
-      type: Number,
-      required: false
-    }
+      latitude: {
+        type: Number,
+        required: false
+      },
+      longitude: {
+        type: Number,
+        required: false
+      }
+  },
+  location_status: {
+    type: String,
+    enum: ['Normal', 'Outlier', null],
+    default: null
   }
 });
 
