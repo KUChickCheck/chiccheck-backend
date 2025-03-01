@@ -281,6 +281,16 @@ exports.getClassAttendanceByDate = async (req, res) => {
             ]
         }).populate('student_id', 'first_name last_name student_id').lean();
 
+        console.log("Query parameters:", {
+            class_id,
+            date,
+            dateRegex: `^${date}`,
+            startDay: startOfDay.format(),
+            endDay: endOfDay.format()
+        });
+        console.log("Found notes raw:", await Note.find({ class_id: class_id }).lean());
+        console.log("Found notes after filter:", notes);
+
         // Calculate location outliers - only if we have multiple attendance records with location data
         const recordsWithLocation = attendanceRecords.filter(record =>
             record.location && record.location.latitude && record.location.longitude
@@ -335,6 +345,14 @@ exports.getClassAttendanceByDate = async (req, res) => {
             });
         }
 
+        const formattedNotes = notes.map(note => ({
+            student_id: note.student_id.student_id,
+            first_name: note.student_id.first_name,
+            last_name: note.student_id.last_name,
+            note_text: note.note_text,
+            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
+        }));
+
         const attendanceMap = {};
         attendanceRecords.forEach(record => {
             const studentId = record.student_id._id.toString();
@@ -345,14 +363,6 @@ exports.getClassAttendanceByDate = async (req, res) => {
                 location_status: locationStatusMap[studentId] ? locationStatusMap[studentId].location_status : 'Unknown'
             };
         });
-
-        const formattedNotes = notes.map(note => ({
-            student_id: note.student_id.student_id,
-            first_name: note.student_id.first_name,
-            last_name: note.student_id.last_name,
-            note_text: note.note_text,
-            timestamp: moment(note.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DD HH:mm:ss')
-        }));
 
         const attendanceList = classDetails.student_ids.map(student => {
             const studentId = student._id.toString();
@@ -372,6 +382,13 @@ exports.getClassAttendanceByDate = async (req, res) => {
                 location: attendanceInfo.location,
                 location_status: attendanceInfo.location_status
             };
+        });
+
+        // Sort attendanceList by student_id numerically
+        attendanceList.sort((a, b) => {
+            const idA = parseInt(a.student_id.replace(/\D/g, ''), 10) || 0;
+            const idB = parseInt(b.student_id.replace(/\D/g, ''), 10) || 0;
+            return idA - idB;
         });
 
         const stats = {
