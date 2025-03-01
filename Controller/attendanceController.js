@@ -301,7 +301,7 @@ exports.getClassAttendanceByDate = async (req, res) => {
 
         // Perform pairwise outlier detection if we have enough data points
         if (recordsWithLocation.length >= 2) {
-            const threshold = 50; // 50 meters
+            const threshold = 20; //
             const outlierThresholdPercent = 0.5; // 50% of students must be within range to be considered normal
 
             // For each student, check distance to all other students
