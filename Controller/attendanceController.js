@@ -41,7 +41,7 @@ async function verifyFace(student_code, photo) {
 
 exports.markAttendance = async (req, res) => {
   try {
-    const { student_id, class_id, photo } = req.body;
+    const { student_id, class_id, photo, latitude, longitude } = req.body;
     const currentTime = new Date();
 
     if (student_id !== req.user.studentId) {
@@ -51,7 +51,11 @@ exports.markAttendance = async (req, res) => {
     }
 
     if (!photo) {
-      return res.status(400).json({ message: "photo are required" });
+      return res.status(400).json({ message: "photo is required" });
+    }
+
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: "Location data is required" });
     }
 
     const student = await Student.findById(student_id);
@@ -123,7 +127,11 @@ exports.markAttendance = async (req, res) => {
       student_id,
       class_id,
       status,
-      timestamp: currentTime
+      timestamp: currentTime,
+      location: {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude)
+      }
     });
 
     await attendance.save();
