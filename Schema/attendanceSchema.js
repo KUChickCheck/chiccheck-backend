@@ -20,10 +20,21 @@ const attendanceSchema = new mongoose.Schema({
     type: Date,
     required: true,
     default: Date.now
+  },
+  location: {
+    latitude: {
+      type: Number,
+      required: false
+    },
+    longitude: {
+      type: Number,
+      required: false
+    }
   }
 });
 
 attendanceSchema.index({ student_id: 1, class_id: 1, timestamp: 1 });
+attendanceSchema.index({ "location.latitude": 1, "location.longitude": 1 });
 
 const Attendance = mongoose.model('Attendance', attendanceSchema);
 module.exports = Attendance;
