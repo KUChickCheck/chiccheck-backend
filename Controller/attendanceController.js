@@ -281,21 +281,72 @@ exports.getClassAttendanceByDate = async (req, res) => {
             ]
         }).populate('student_id', 'first_name last_name student_id').lean();
 
-        console.log("Query parameters:", {
-            class_id,
-            date,
-            dateRegex: `^${date}`,
-            startDay: startOfDay.format(),
-            endDay: endOfDay.format()
-        });
-        console.log("Found notes raw:", await Note.find({ class_id: class_id }).lean());
-        console.log("Found notes after filter:", notes);
+        // Calculate location outliers - only if we have multiple attendance records with location data
+        const recordsWithLocation = attendanceRecords.filter(record =>
+            record.location && record.location.latitude && record.location.longitude
+        );
+
+        // Initialize location status map
+        const locationStatusMap = {};
+
+        // Only perform outlier detection if we have enough data points
+        if (recordsWithLocation.length >= 3) {
+            // Calculate the mean center of all locations
+            const locationSum = recordsWithLocation.reduce((sum, record) => {
+                return {
+                    latitude: sum.latitude + record.location.latitude,
+                    longitude: sum.longitude + record.location.longitude
+                };
+            }, { latitude: 0, longitude: 0 });
+
+            const meanCenter = {
+                latitude: locationSum.latitude / recordsWithLocation.length,
+                longitude: locationSum.longitude / recordsWithLocation.length
+            };
+
+            // Calculate the distance of each location from the mean center
+            const recordsWithDistance = recordsWithLocation.map(record => {
+                const distance = calculateDistance(
+                    record.location.latitude,
+                    record.location.longitude,
+                    meanCenter.latitude,
+                    meanCenter.longitude
+                );
+
+                return {
+                    student_id: record.student_id._id.toString(),
+                    distance
+                };
+            });
+
+            // Calculate standard deviation of distances
+            const distances = recordsWithDistance.map(r => r.distance);
+            const meanDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+            const squaredDifferences = distances.map(d => Math.pow(d - meanDistance, 2));
+            const variance = squaredDifferences.reduce((sum, sq) => sum + sq, 0) / distances.length;
+            const stdDev = Math.sqrt(variance);
+
+            // Mark outliers (locations more than 2 standard deviations from mean)
+            const outlierThreshold = meanDistance + (2 * stdDev);
+
+            // Create location status map for each student
+            recordsWithDistance.forEach(record => {
+                locationStatusMap[record.student_id] = {
+                    is_outlier: record.distance > outlierThreshold,
+                    distance_from_center: record.distance,
+                    location_status: record.distance > outlierThreshold ? 'Outlier' : 'Normal'
+                };
+            });
+        }
 
         const attendanceMap = {};
         attendanceRecords.forEach(record => {
-            attendanceMap[record.student_id._id.toString()] = {
+            const studentId = record.student_id._id.toString();
+            attendanceMap[studentId] = {
                 status: record.status,
-                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ')
+                timestamp: moment(record.timestamp).tz("Asia/Bangkok").format('YYYY-MM-DDTHH:mm:ss.SSSZ'),
+                location: record.location || null,
+                location_status: locationStatusMap[studentId] ? locationStatusMap[studentId].location_status : 'Unknown'
             };
         });
 
@@ -308,9 +359,12 @@ exports.getClassAttendanceByDate = async (req, res) => {
         }));
 
         const attendanceList = classDetails.student_ids.map(student => {
-            const attendanceInfo = attendanceMap[student._id.toString()] || {
+            const studentId = student._id.toString();
+            const attendanceInfo = attendanceMap[studentId] || {
                 status: 'Absent',
-                timestamp: null
+                timestamp: null,
+                location: null,
+                location_status: 'Unknown'
             };
 
             return {
@@ -318,7 +372,9 @@ exports.getClassAttendanceByDate = async (req, res) => {
                 first_name: student.first_name,
                 last_name: student.last_name,
                 status: attendanceInfo.status,
-                timestamp: attendanceInfo.timestamp
+                timestamp: attendanceInfo.timestamp,
+                location: attendanceInfo.location,
+                location_status: attendanceInfo.location_status
             };
         });
 
@@ -326,10 +382,11 @@ exports.getClassAttendanceByDate = async (req, res) => {
             total_students: classDetails.student_ids.length,
             ontime: attendanceList.filter(a => a.status === 'Present').length,
             late: attendanceList.filter(a => a.status === 'Late').length,
-            absent: attendanceList.filter(a => a.status === 'Absent').length
+            absent: attendanceList.filter(a => a.status === 'Absent').length,
+            location_outliers: Object.values(locationStatusMap).filter(status => status.is_outlier).length || 0
         };
 
-       res.status(200).json({
+        res.status(200).json({
             class_name: classDetails.class_name,
             class_code: classDetails.class_code,
             date: moment.tz(date, "Asia/Bangkok").format('YYYY-MM-DD'),
@@ -343,6 +400,20 @@ exports.getClassAttendanceByDate = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
+// Helper function to calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in km
+    return distance * 1000; // Convert to meters
+}
 
 
 exports.getStudentClassReport = async (req, res) => {
@@ -486,3 +557,127 @@ exports.submitAttendanceNote = async (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
+exports.detectLocationOutliers = async (req, res) => {
+  try {
+    const { class_id, date } = req.params;
+
+    // Get the date range for the class session
+    const startOfDay = moment.tz(date, "Asia/Bangkok").startOf('day');
+    const endOfDay = moment.tz(date, "Asia/Bangkok").endOf('day');
+
+    // Find all attendance records for this class on this date
+    const attendanceRecords = await Attendance.find({
+      class_id,
+      timestamp: {
+        $gte: startOfDay.toDate(),
+        $lte: endOfDay.toDate()
+      },
+      'location.latitude': { $exists: true },
+      'location.longitude': { $exists: true }
+    }).populate('student_id', 'first_name last_name student_id');
+
+    if (attendanceRecords.length < 3) {
+      return res.status(400).json({
+        message: "Not enough attendance records to detect outliers",
+        attendanceRecords
+      });
+    }
+
+    // Calculate the mean center of all locations
+    const locationSum = attendanceRecords.reduce((sum, record) => {
+      return {
+        latitude: sum.latitude + record.location.latitude,
+        longitude: sum.longitude + record.location.longitude
+      };
+    }, { latitude: 0, longitude: 0 });
+
+    const meanCenter = {
+      latitude: locationSum.latitude / attendanceRecords.length,
+      longitude: locationSum.longitude / attendanceRecords.length
+    };
+
+    // Calculate the distance of each location from the mean center
+    const recordsWithDistance = attendanceRecords.map(record => {
+      const distance = calculateDistance(
+        record.location.latitude,
+        record.location.longitude,
+        meanCenter.latitude,
+        meanCenter.longitude
+      );
+
+      return {
+        ...record.toObject(),
+        distance
+      };
+    });
+
+    // Calculate standard deviation of distances
+    const distances = recordsWithDistance.map(r => r.distance);
+    const meanDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+    const squaredDifferences = distances.map(d => Math.pow(d - meanDistance, 2));
+    const variance = squaredDifferences.reduce((sum, sq) => sum + sq, 0) / distances.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Mark outliers (locations more than 2 standard deviations from mean)
+    const outlierThreshold = meanDistance + (2 * stdDev);
+    const resultsWithOutlierStatus = recordsWithDistance.map(record => {
+      return {
+        student_id: record.student_id._id,
+        student_name: `${record.student_id.first_name} ${record.student_id.last_name}`,
+        student_code: record.student_id.student_id,
+        location: record.location,
+        distance_from_center: record.distance,
+        is_outlier: record.distance > outlierThreshold
+      };
+    });
+
+    // Count outliers
+    const outlierCount = resultsWithOutlierStatus.filter(r => r.is_outlier).length;
+
+    // Update attendance records to mark outliers
+    for (const record of resultsWithOutlierStatus) {
+      if (record.is_outlier) {
+        await Attendance.findOneAndUpdate(
+          {
+            student_id: record.student_id,
+            class_id,
+            timestamp: {
+              $gte: startOfDay.toDate(),
+              $lte: endOfDay.toDate()
+            }
+          },
+          { $set: { location_status: 'Outlier' } }
+        );
+      } else {
+        await Attendance.findOneAndUpdate(
+          {
+            student_id: record.student_id,
+            class_id,
+            timestamp: {
+              $gte: startOfDay.toDate(),
+              $lte: endOfDay.toDate()
+            }
+          },
+          { $set: { location_status: 'Normal' } }
+        );
+      }
+    }
+
+    res.status(200).json({
+      message: "Location outlier detection completed",
+      date,
+      class_id,
+      mean_center: meanCenter,
+      outlier_threshold: outlierThreshold,
+      outlier_count: outlierCount,
+      total_students: attendanceRecords.length,
+      results: resultsWithOutlierStatus
+    });
+
+  } catch (err) {
+    console.error("Error detecting location outliers:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
