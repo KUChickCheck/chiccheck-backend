@@ -139,7 +139,7 @@ exports.markAttendance = async (req, res) => {
     res.status(201).json({
       message: "Attendance marked successfully",
       attendance: {
-        ...attendance.toObject(),
+        // ...attendance.toObject(),
         class_details: {
           name: classDetails.class_name,
           start_time: todaySchedule.start_time,
