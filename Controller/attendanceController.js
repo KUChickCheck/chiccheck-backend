@@ -134,7 +134,7 @@ exports.markAttendance = async (req, res) => {
       }
     });
 
-    await attendance.save();
+    // await attendance.save();
 
     res.status(201).json({
       message: "Attendance marked successfully",
